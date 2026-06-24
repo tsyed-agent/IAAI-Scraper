@@ -52,6 +52,7 @@ def test_parse_row():
     assert lot.runs is False and lot.has_keys is True
     assert lot.branch_id == 70 and lot.province == "ON"
     assert lot.buy_now_price is None  # $0.00 -> None
+    assert lot.status == "active"
     assert lot.detail_url.endswith("stockno=12637338")
     assert lot.raw["Make"] == "MITSUBISHI"  # raw preserved
 

@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from .config import DETAIL_URL_TEMPLATE
+from .lifecycle import best_final_price, derive_lot_status, is_concluded
 from .models import Lot
 
 # ".NET" JSON date format: "/Date(1782313200000)/" (ms since epoch, may be negative)
@@ -102,6 +103,8 @@ def parse_row(row: dict[str, Any]) -> Optional[Lot]:
         return None
 
     location = _str(row.get("VehicleLocation"))
+    status, _status_reason = derive_lot_status(row)
+    final_price = best_final_price(row) if is_concluded(status) else None
     return Lot(
         stock_number=stock_number,
         stock_id=_int(row.get("StockId")),
@@ -140,5 +143,12 @@ def parse_row(row: dict[str, Any]) -> Optional[Lot]:
         is_timed_auction=_bool(row.get("IsTimedAuction")),
         buy_now_price=_price(row.get("BuyNowPrice")),
         high_prebid=_price(row.get("HighPrebidValue")),
+        timed_high_bid=_price(row.get("TimedAuctionHighestBidAmountValue")),
+        status=status,
+        item_status_desc=_str(row.get("ItemStatusDesc")),
+        prebid_item_status_desc=_str(row.get("PrebidItemStatusDesc")),
+        prebid_item_status_id=_int(row.get("PrebidItemStatusID")),
+        final_price=final_price,
+        bid_closes_at=_dotnet_date(row.get("BidItemClosingDateUTC")),
         raw=row,
     )

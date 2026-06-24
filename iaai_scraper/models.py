@@ -62,7 +62,16 @@ class Lot(BaseModel):
     is_timed_auction: Optional[bool] = None
     buy_now_price: Optional[float] = None
     high_prebid: Optional[float] = None
+    timed_high_bid: Optional[float] = None
     currency: str = "CAD"
+
+    # --- lifecycle / sale outcome (from ItemStatusDesc etc.) ------------ #
+    status: str = "active"                       # active | sold | if_bid | passed
+    item_status_desc: Optional[str] = None       # Sold / IfBid / Pass / empty
+    prebid_item_status_desc: Optional[str] = None
+    prebid_item_status_id: Optional[int] = None
+    final_price: Optional[float] = None          # best anonymous sale/bid signal
+    bid_closes_at: Optional[datetime] = None
 
     # --- provenance / housekeeping -------------------------------------- #
     source: str = "ca.iaai.com"
