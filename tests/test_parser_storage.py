@@ -1,32 +1,9 @@
 """Offline unit tests for parsing + storage (no network)."""
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 from iaai_scraper.parser import parse_row, _money, _price, _bool, _dotnet_date, _province
 from iaai_scraper.models import Lot
 from iaai_scraper.storage import SqliteStore
 from iaai_scraper import config
-
-# A realistic raw row captured from the live API during Phase 0.
-SAMPLE_ROW = {
-    "StockNum": "12637338", "StockId": 3038001, "Vin": "JA4AJUAU9TU******",
-    "Year": 2026, "Make": "MITSUBISHI", "Model": "RVR ES AWC",
-    "Engine": "2.0L I-4 DOHC, VVT, 148HP", "FuelType": "", "Transmission": "Auto",
-    "OdometerReading": 9701, "OdometerUnit": "Km", "OdometerSource": "Actual",
-    "PrimaryDamage": "Front", "SecondaryDamage": "Left Side",
-    "Brand": "MB-SALVAGABLE", "BrandCodeType": "Repairable",
-    "DamageEstimate": "$26,044.00", "ConditionText": "Stationary",
-    "Drives": "False", "Starts": "False", "Keys": "True",
-    "StockBranchId": 70, "StockBranchDescription": "Toronto North",
-    "VehicleLocation": "Stouffville, ON",
-    "Auction": "IAA Ontario Regional Sale", "AuctionId": 17887,
-    "AuctionDate": "2026-06-24", "AuctionDateTimeDisplay": "Wed, Jun 24, 11:00 AM EDT",
-    "AuctionDateUTC": "/Date(1782313200000)/", "AuctionType": "PUBLIC",
-    "AuctionLaneNum": 2, "AuctionSequenceNum": 48, "IsTimedAuction": False,
-    "BuyNowPrice": "$0.00", "HighPrebidValue": 0,
-}
+from tests.conftest import SAMPLE_ROW
 
 
 def test_money():
