@@ -57,6 +57,7 @@ completeness checks), usage, results, and limitations are documented in
 | [`docs/03-storage-decision.md`](docs/03-storage-decision.md) | JSON vs database decision. |
 | [`docs/04-data-model.md`](docs/04-data-model.md) | Lot schema, SQLite DDL. |
 | [`docs/05-implementation.md`](docs/05-implementation.md) | **How the built scraper works, anti-detection, safeguards, usage, results.** |
+| [`docs/06-realtime-archive-infrastructure.md`](docs/06-realtime-archive-infrastructure.md) | **Real-time price + historical archive: free-infra research & recommendation.** |
 
 ## Project layout
 
