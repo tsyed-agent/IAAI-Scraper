@@ -1,0 +1,9 @@
+# Core scraping
+playwright==1.49.1          # headless Chromium to pass the Imperva/Incapsula challenge
+# Data modelling / validation
+pydantic==2.10.4
+# Internal API
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+# CLI / utils
+typer==0.15.1
