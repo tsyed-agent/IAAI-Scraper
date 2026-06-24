@@ -55,7 +55,12 @@ def extract_total(payload: dict[str, Any]) -> Optional[int]:
     """The authoritative total lives in SummaryList where Description==TOTAL_COUNT."""
     for item in payload.get("SummaryList") or []:
         if item.get("Description") == "TOTAL_COUNT":
-            return item.get("Count")
+            raw = item.get("Count")
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                log.warning("extract_total: non-numeric TOTAL_COUNT %r", raw)
+                return None
     return None
 
 
