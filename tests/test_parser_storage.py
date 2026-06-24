@@ -38,6 +38,20 @@ def test_parse_row_missing_stock():
     assert parse_row({"Make": "X"}) is None  # no stock number => skipped
 
 
+def test_parse_row_non_dict_returns_none():
+    assert parse_row(None) is None
+    assert parse_row("not a dict") is None
+    assert parse_row(12345) is None
+
+
+def test_parse_row_bad_year_does_not_raise():
+    from tests.conftest import make_row
+    row = make_row("99999999", Year="garbage")
+    lot = parse_row(row)
+    assert lot is not None
+    assert lot.year is None
+
+
 def test_ontario_classifier():
     s = config.CrawlSettings()
     assert s.is_ontario(70, "Toronto North") is True

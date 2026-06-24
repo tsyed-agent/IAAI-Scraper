@@ -6,6 +6,7 @@ preserved on ``Lot.raw``.
 """
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -13,6 +14,8 @@ from typing import Any, Optional
 from .config import DETAIL_URL_TEMPLATE
 from .lifecycle import best_final_price, derive_lot_status, is_concluded
 from .models import Lot
+
+log = logging.getLogger("iaai.parser")
 
 # ".NET" JSON date format: "/Date(1782313200000)/" (ms since epoch, may be negative)
 _DOTNET_DATE_RE = re.compile(r"/Date\((-?\d+)\)/")
@@ -97,58 +100,65 @@ def _province(location: Optional[str]) -> Optional[str]:
 
 def parse_row(row: dict[str, Any]) -> Optional[Lot]:
     """Map one raw RunList dict to a Lot. Returns None if it lacks a stock number."""
+    if not isinstance(row, dict):
+        return None
+
     stock_number = _str(row.get("StockNum"))
     if not stock_number:
         # Without the business key we cannot dedup/store reliably; skip it.
         return None
 
     location = _str(row.get("VehicleLocation"))
-    status, _status_reason = derive_lot_status(row)
-    final_price = best_final_price(row) if is_concluded(status) else None
-    return Lot(
-        stock_number=stock_number,
-        stock_id=_int(row.get("StockId")),
-        vin=_str(row.get("Vin")),
-        detail_url=DETAIL_URL_TEMPLATE.format(stock_num=stock_number),
-        year=_int(row.get("Year")),
-        make=_str(row.get("Make")),
-        model=_str(row.get("Model")),
-        engine=_str(row.get("Engine")),
-        fuel_type=_str(row.get("FuelType")),
-        transmission=_str(row.get("Transmission")),
-        odometer=_int(row.get("OdometerReading")),
-        odometer_unit=_str(row.get("OdometerUnit")),
-        odometer_source=_str(row.get("OdometerSource")),
-        primary_damage=_str(row.get("PrimaryDamage")),
-        secondary_damage=_str(row.get("SecondaryDamage")),
-        title_brand=_str(row.get("Brand")),
-        title_brand_type=_str(row.get("BrandCodeType")),
-        damage_estimate=_money(row.get("DamageEstimate")),
-        condition_text=_str(row.get("ConditionText")),
-        runs=_bool(row.get("Drives")),
-        starts=_bool(row.get("Starts")),
-        has_keys=_bool(row.get("Keys")),
-        branch_id=_int(row.get("StockBranchId")),
-        branch_name=_str(row.get("StockBranchDescription")),
-        location=location,
-        province=_province(location),
-        auction_name=_str(row.get("Auction")),
-        auction_id=_int(row.get("AuctionId")),
-        auction_date=_str(row.get("AuctionDate")),
-        auction_datetime_display=_str(row.get("AuctionDateTimeDisplay")),
-        auction_datetime_utc=_dotnet_date(row.get("AuctionDateUTC")),
-        auction_type=_str(row.get("AuctionType")),
-        lane=_str(row.get("AuctionLaneNum")),
-        sequence=_int(row.get("AuctionSequenceNum")),
-        is_timed_auction=_bool(row.get("IsTimedAuction")),
-        buy_now_price=_price(row.get("BuyNowPrice")),
-        high_prebid=_price(row.get("HighPrebidValue")),
-        timed_high_bid=_price(row.get("TimedAuctionHighestBidAmountValue")),
-        status=status,
-        item_status_desc=_str(row.get("ItemStatusDesc")),
-        prebid_item_status_desc=_str(row.get("PrebidItemStatusDesc")),
-        prebid_item_status_id=_int(row.get("PrebidItemStatusID")),
-        final_price=final_price,
-        bid_closes_at=_dotnet_date(row.get("BidItemClosingDateUTC")),
-        raw=row,
-    )
+    try:
+        status, _status_reason = derive_lot_status(row)
+        final_price = best_final_price(row) if is_concluded(status) else None
+        return Lot(
+            stock_number=stock_number,
+            stock_id=_int(row.get("StockId")),
+            vin=_str(row.get("Vin")),
+            detail_url=DETAIL_URL_TEMPLATE.format(stock_num=stock_number),
+            year=_int(row.get("Year")),
+            make=_str(row.get("Make")),
+            model=_str(row.get("Model")),
+            engine=_str(row.get("Engine")),
+            fuel_type=_str(row.get("FuelType")),
+            transmission=_str(row.get("Transmission")),
+            odometer=_int(row.get("OdometerReading")),
+            odometer_unit=_str(row.get("OdometerUnit")),
+            odometer_source=_str(row.get("OdometerSource")),
+            primary_damage=_str(row.get("PrimaryDamage")),
+            secondary_damage=_str(row.get("SecondaryDamage")),
+            title_brand=_str(row.get("Brand")),
+            title_brand_type=_str(row.get("BrandCodeType")),
+            damage_estimate=_money(row.get("DamageEstimate")),
+            condition_text=_str(row.get("ConditionText")),
+            runs=_bool(row.get("Drives")),
+            starts=_bool(row.get("Starts")),
+            has_keys=_bool(row.get("Keys")),
+            branch_id=_int(row.get("StockBranchId")),
+            branch_name=_str(row.get("StockBranchDescription")),
+            location=location,
+            province=_province(location),
+            auction_name=_str(row.get("Auction")),
+            auction_id=_int(row.get("AuctionId")),
+            auction_date=_str(row.get("AuctionDate")),
+            auction_datetime_display=_str(row.get("AuctionDateTimeDisplay")),
+            auction_datetime_utc=_dotnet_date(row.get("AuctionDateUTC")),
+            auction_type=_str(row.get("AuctionType")),
+            lane=_str(row.get("AuctionLaneNum")),
+            sequence=_int(row.get("AuctionSequenceNum")),
+            is_timed_auction=_bool(row.get("IsTimedAuction")),
+            buy_now_price=_price(row.get("BuyNowPrice")),
+            high_prebid=_price(row.get("HighPrebidValue")),
+            timed_high_bid=_price(row.get("TimedAuctionHighestBidAmountValue")),
+            status=status,
+            item_status_desc=_str(row.get("ItemStatusDesc")),
+            prebid_item_status_desc=_str(row.get("PrebidItemStatusDesc")),
+            prebid_item_status_id=_int(row.get("PrebidItemStatusID")),
+            final_price=final_price,
+            bid_closes_at=_dotnet_date(row.get("BidItemClosingDateUTC")),
+            raw=row,
+        )
+    except Exception:  # noqa: BLE001 - never let one row abort the crawl
+        log.warning("parse_row: dropping row stock=%s (parse/validation failed)", stock_number)
+        return None
