@@ -1,0 +1,19 @@
+[project]
+name = "iaai-scraper"
+version = "0.1.0"
+description = "Ontario-scoped IAAI Canada auction lot scraper + read API"
+requires-python = ">=3.11"
+dynamic = ["dependencies"]
+
+[project.scripts]
+iaai-scraper = "iaai_scraper.cli:app"
+
+[tool.setuptools]
+packages = ["iaai_scraper"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
