@@ -34,6 +34,11 @@ def test_parse_row():
     assert lot.raw["Make"] == "MITSUBISHI"  # raw preserved
 
 
+def test_lot_model_has_lifecycle_housekeeping_fields():
+    assert "status_updated_at" in Lot.model_fields
+    assert "delisted_at" in Lot.model_fields
+
+
 def test_parse_row_missing_stock():
     assert parse_row({"Make": "X"}) is None  # no stock number => skipped
 

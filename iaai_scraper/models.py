@@ -72,6 +72,8 @@ class Lot(BaseModel):
     prebid_item_status_id: Optional[int] = None
     final_price: Optional[float] = None          # best anonymous sale/bid signal
     bid_closes_at: Optional[datetime] = None
+    status_updated_at: Optional[datetime] = None
+    delisted_at: Optional[datetime] = None
 
     # --- provenance / housekeeping -------------------------------------- #
     source: str = "ca.iaai.com"
