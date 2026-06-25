@@ -294,6 +294,32 @@ class SqliteStore:
         self._update(data)
         return "updated" if changed else "unchanged"
 
+    def archive_missing(self, seen_stock: set[str], now: Optional[datetime] = None) -> int:
+        """Mark lots absent from a completed crawl without erasing sale outcomes."""
+        now = now or _now()
+        ts = now.isoformat()
+        rows = self.conn.execute(
+            "SELECT stock_number, status FROM lots WHERE delisted_at IS NULL"
+        ).fetchall()
+        removed = 0
+        for row in rows:
+            if row["stock_number"] in seen_stock:
+                continue
+            if row["status"] == "active":
+                self.conn.execute(
+                    "UPDATE lots SET status = 'removed', status_updated_at = ?, "
+                    "delisted_at = ? WHERE stock_number = ?",
+                    (ts, ts, row["stock_number"]),
+                )
+                removed += 1
+            else:
+                self.conn.execute(
+                    "UPDATE lots SET delisted_at = ? WHERE stock_number = ?",
+                    (ts, row["stock_number"]),
+                )
+        self.conn.commit()
+        return removed
+
     def _insert(self, data: dict[str, Any]) -> None:
         cols = ", ".join(_COLUMNS)
         placeholders = ", ".join(["?"] * len(_COLUMNS))

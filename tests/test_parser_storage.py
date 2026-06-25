@@ -108,3 +108,23 @@ def test_change_detection_on_untracked_field(tmp_path):
     out = store.upsert_lot(parse_row(make_row("4004", Model="OUTLANDER")))
     assert out == "updated"
     store.close()
+
+
+def test_archive_missing_only_touches_active(tmp_path):
+    from tests.conftest import make_row
+    db = tmp_path / "t.db"
+    store = SqliteStore(db_path=db)
+    store.upsert_lot(parse_row(make_row("5005", ItemStatusDesc="")))
+    store.upsert_lot(parse_row(make_row("5006", ItemStatusDesc="")))
+    store.upsert_lot(parse_row(make_row("5007", ItemStatusDesc="Sold", HighPrebidValue=900)))
+
+    n = store.archive_missing({"5005"})
+    assert n == 1
+    assert store.get_lot("5005")["status"] == "active"
+    rec6 = store.get_lot("5006")
+    assert rec6["status"] == "removed"
+    assert rec6["delisted_at"] is not None
+    rec7 = store.get_lot("5007")
+    assert rec7["status"] == "sold"
+    assert rec7["delisted_at"] is not None
+    store.close()
