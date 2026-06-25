@@ -67,8 +67,11 @@ _COLUMNS = [
     "branch_id", "branch_name", "location", "province",
     "auction_name", "auction_id", "auction_date", "auction_datetime_display",
     "auction_datetime_utc", "auction_type", "lane", "sequence",
-    "is_timed_auction", "buy_now_price", "high_prebid", "currency",
-    "source", "first_seen", "last_seen", "last_changed", "raw",
+    "is_timed_auction", "buy_now_price", "high_prebid", "timed_high_bid", "currency",
+    "source",
+    "status", "item_status_desc", "prebid_item_status_desc", "prebid_item_status_id",
+    "final_price", "bid_closes_at", "status_updated_at", "delisted_at",
+    "first_seen", "last_seen", "last_changed", "raw",
 ]
 
 _DDL = """
@@ -110,18 +113,22 @@ CREATE TABLE IF NOT EXISTS lots (
     is_timed_auction      INTEGER,
     buy_now_price         REAL,
     high_prebid           REAL,
+    timed_high_bid        REAL,
     currency              TEXT DEFAULT 'CAD',
     source                TEXT DEFAULT 'ca.iaai.com',
+    status                TEXT DEFAULT 'active',
+    item_status_desc      TEXT,
+    prebid_item_status_desc TEXT,
+    prebid_item_status_id INTEGER,
+    final_price           REAL,
+    bid_closes_at         TEXT,
+    status_updated_at     TEXT,
+    delisted_at           TEXT,
     first_seen            TEXT,
     last_seen             TEXT,
     last_changed          TEXT,
     raw                   TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_lots_make_model_year ON lots (make, model, year);
-CREATE INDEX IF NOT EXISTS idx_lots_branch          ON lots (branch_id);
-CREATE INDEX IF NOT EXISTS idx_lots_auction_date    ON lots (auction_date);
-CREATE INDEX IF NOT EXISTS idx_lots_province        ON lots (province);
-CREATE INDEX IF NOT EXISTS idx_lots_vin             ON lots (vin);
 
 -- Per-run audit so we can see crawl health/freshness over time.
 CREATE TABLE IF NOT EXISTS crawl_runs (
@@ -132,15 +139,92 @@ CREATE TABLE IF NOT EXISTS crawl_runs (
     ontario_seen  INTEGER,
     inserted      INTEGER,
     updated       INTEGER,
+    unchanged     INTEGER,
+    skipped_bad_rows INTEGER,
+    canada_rows_seen INTEGER,
+    archived      INTEGER,
+    run_type      TEXT DEFAULT 'full',
     pages         INTEGER,
     status        TEXT,
     note          TEXT
 );
 """
 
+_INDEX_DDL = """
+CREATE INDEX IF NOT EXISTS idx_lots_make_model_year ON lots (make, model, year);
+CREATE INDEX IF NOT EXISTS idx_lots_branch          ON lots (branch_id);
+CREATE INDEX IF NOT EXISTS idx_lots_auction_date    ON lots (auction_date);
+CREATE INDEX IF NOT EXISTS idx_lots_province        ON lots (province);
+CREATE INDEX IF NOT EXISTS idx_lots_vin             ON lots (vin);
+CREATE INDEX IF NOT EXISTS idx_lots_status          ON lots (status);
+"""
+
 # Change-tracked columns: if any differ on re-scrape, bump last_changed.
 _CHANGE_COLS = ("auction_date", "buy_now_price", "high_prebid", "auction_name", "lane",
                 "primary_damage", "secondary_damage")
+
+_MIGRATIONS = {
+    "lots": {
+        "stock_id": "INTEGER",
+        "vin": "TEXT",
+        "detail_url": "TEXT",
+        "year": "INTEGER",
+        "make": "TEXT",
+        "model": "TEXT",
+        "engine": "TEXT",
+        "fuel_type": "TEXT",
+        "transmission": "TEXT",
+        "odometer": "INTEGER",
+        "odometer_unit": "TEXT",
+        "odometer_source": "TEXT",
+        "primary_damage": "TEXT",
+        "secondary_damage": "TEXT",
+        "title_brand": "TEXT",
+        "title_brand_type": "TEXT",
+        "damage_estimate": "REAL",
+        "condition_text": "TEXT",
+        "runs": "INTEGER",
+        "starts": "INTEGER",
+        "has_keys": "INTEGER",
+        "branch_id": "INTEGER",
+        "branch_name": "TEXT",
+        "location": "TEXT",
+        "province": "TEXT",
+        "auction_name": "TEXT",
+        "auction_id": "INTEGER",
+        "auction_date": "TEXT",
+        "auction_datetime_display": "TEXT",
+        "auction_datetime_utc": "TEXT",
+        "auction_type": "TEXT",
+        "lane": "TEXT",
+        "sequence": "INTEGER",
+        "is_timed_auction": "INTEGER",
+        "buy_now_price": "REAL",
+        "high_prebid": "REAL",
+        "timed_high_bid": "REAL",
+        "currency": "TEXT DEFAULT 'CAD'",
+        "source": "TEXT DEFAULT 'ca.iaai.com'",
+        "status": "TEXT DEFAULT 'active'",
+        "item_status_desc": "TEXT",
+        "prebid_item_status_desc": "TEXT",
+        "prebid_item_status_id": "INTEGER",
+        "final_price": "REAL",
+        "bid_closes_at": "TEXT",
+        "status_updated_at": "TEXT",
+        "delisted_at": "TEXT",
+        "first_seen": "TEXT",
+        "last_seen": "TEXT",
+        "last_changed": "TEXT",
+        "raw": "TEXT",
+    },
+    "crawl_runs": {
+        "unchanged": "INTEGER",
+        "skipped_bad_rows": "INTEGER",
+        "canada_rows_seen": "INTEGER",
+        "archived": "INTEGER",
+        "run_type": "TEXT DEFAULT 'full'",
+    },
+}
 
 
 def _to_db_value(v: Any) -> Any:
@@ -160,8 +244,20 @@ class SqliteStore:
         self.conn.row_factory = sqlite3.Row
         # WAL improves concurrent read (API) + write (crawler) behaviour.
         self.conn.execute("PRAGMA journal_mode=WAL;")
+        self.conn.execute("PRAGMA busy_timeout=5000;")
         self.conn.executescript(_DDL)
+        self._migrate()
+        self.conn.executescript(_INDEX_DDL)
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        for table, cols in _MIGRATIONS.items():
+            existing = {r[1] for r in self.conn.execute(
+                f"PRAGMA table_info({table})").fetchall()}
+            for name, decl in cols.items():
+                if name not in existing:
+                    self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+                    log.info("migrated: added %s.%s", table, name)
 
     def close(self) -> None:
         self.conn.close()
