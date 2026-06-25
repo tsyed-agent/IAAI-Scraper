@@ -89,12 +89,17 @@ Imperva/Incapsula scores TLS fingerprint, IP reputation, a JS challenge
 - **Error handling:**
   - Retries with exponential backoff (`MAX_RETRIES`, `BACKOFF_BASE_S`) for
     transient failures and soft blocks.
-  - Per-row parsing is defensive — a malformed row is counted (`bad`) and skipped,
-    never fatal.
+  - Per-row parsing is defensive — a malformed row is counted (`skipped_bad_rows`)
+    and skipped, never fatal. A page where *no* rows parse raises `failed`.
   - The crawl records a row in `crawl_runs` (status, counts, note) even on failure.
+  - Exclusive `data/crawl.lock` prevents concurrent crawls; delete if stale.
+  - Invalid numeric env vars fall back to defaults with a warning (see `config.py`).
 - **Completeness check:** final status is `completed` only when we paged through
   ≥ 98 % of the authoritative Canada total (slack for live churn); otherwise
-  `completed_partial`.
+  `completed_partial`. Archival (`active → removed`) runs **only** on `completed`.
+- **Lifecycle / archival:** after a completed crawl, `archive_missing()` transitions
+  unseen `active` lots to `removed` and stamps `delisted_at` on concluded lots
+  that vanished. Sale outcomes are never overwritten.
 
 ## 5. Usage
 
@@ -125,9 +130,14 @@ Useful env overrides: `IAAI_PROXY`, `IAAI_DELAY_MIN`/`IAAI_DELAY_MAX`,
 ### API endpoints
 - `GET /lots` — filter by `make, model, branch_id, province, year_min/max,
   auction_date_from/to, runs, title_brand_type, auction_type, keyword`; paginate
-  (`limit`, `offset`); sort (`sort`, `descending`).
+  (`limit`, `offset`); sort (`sort`, `descending`). **Default returns all lots**
+  (unchanged). Opt-in `status=active|sold|if_bid|passed|removed|all` filters by
+  lifecycle status.
 - `GET /lots/{stock_number}` — full record incl. preserved `raw`.
-- `GET /branches`, `GET /stats`, `GET /healthz`.
+- `GET /branches`, `GET /stats`, `GET /healthz` (liveness), `GET /readyz` (DB readiness).
+
+See also [`docs/reference/lot_field_analysis.md`](reference/lot_field_analysis.md) for
+live field investigation (`ItemStatusDesc`, bid signals, etc.).
 
 ## 6. Verified results (live run)
 

@@ -27,8 +27,11 @@ Example API calls:
 ```bash
 curl "http://127.0.0.1:8000/lots?make=toyota&year_min=2018&limit=20"
 curl "http://127.0.0.1:8000/lots?branch_id=70&runs=true&sort=year&descending=true"
+curl "http://127.0.0.1:8000/lots?status=sold&limit=5"   # opt-in status filter
 curl "http://127.0.0.1:8000/lots/12033066"
 curl "http://127.0.0.1:8000/stats"
+curl "http://127.0.0.1:8000/readyz"   # readiness (DB populated)
+curl "http://127.0.0.1:8000/healthz"  # liveness only
 ```
 
 ## How it works (short version)
@@ -40,9 +43,36 @@ curl "http://127.0.0.1:8000/stats"
 2. **Crawl completely.** Page through the whole Canada result set sorted by
    `STOCK ASC` (immutable stock numbers → stable, non-overlapping pages), keep
    only Ontario-branch lots, dedup by stock number.
-3. **Store two ways.** Append raw rows to gzipped JSON Lines (audit/replay) and
-   upsert normalized rows into SQLite (`first_seen`/`last_seen`/`last_changed`).
+3. **Store two ways.** Append every unique Canada row (pre-Ontario filter) to
+   gzipped JSON Lines (audit/replay) and upsert normalized rows into SQLite
+   (`first_seen`/`last_seen`/`last_changed`, lifecycle status columns).
 4. **Serve.** A read-only FastAPI exposes query/filter/retrieve endpoints.
+
+### Lifecycle statuses
+
+Each lot carries a single `status` column:
+
+| Status | Meaning |
+|---|---|
+| `active` | On market / upcoming (empty `ItemStatusDesc`) |
+| `sold` | Sold (`ItemStatusDesc=Sold`) |
+| `if_bid` | Conditional sale (`ItemStatusDesc=IfBid`) |
+| `passed` | Did not sell (`ItemStatusDesc=Pass`) |
+| `removed` | Was `active` but vanished from a completed crawl snapshot |
+
+Sale outcomes are derived at parse time from `ItemStatusDesc`. After a
+**completed** full crawl, lots that were `active` but not seen are transitioned
+to `removed`; concluded lots (`sold`/`if_bid`/`passed`) keep their outcome and
+get `delisted_at` stamped. Lots are never deleted.
+
+`final_price` is populated only for concluded lots (best anonymous bid signal from
+`HighPrebidValue` / `TimedAuctionHighestBidAmountValue`; `WinningbidAmount` is
+usually empty for anonymous users).
+
+**API filtering:** `GET /lots` default is unchanged — returns everything. Use
+`?status=active|sold|if_bid|passed|removed` to filter opt-in; `?status=all` is
+explicit no-filter. Use `/readyz` for readiness (DB reachable + lot count) vs
+`/healthz` for liveness.
 
 Best-practice anti-flagging, safeguards (loop/duplicate prevention, retries,
 completeness checks), usage, results, and limitations are documented in
