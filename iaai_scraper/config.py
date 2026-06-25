@@ -6,9 +6,34 @@ support different deployments without code changes.
 """
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+
+_log = logging.getLogger("iaai.config")
+
+
+def _env_float(name: str, default: float) -> float:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except ValueError:
+        _log.warning("Invalid %s=%r; using default %s", name, val, default)
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    try:
+        return int(val)
+    except ValueError:
+        _log.warning("Invalid %s=%r; using default %s", name, val, default)
+        return default
 
 # --------------------------------------------------------------------------- #
 # Target site
@@ -50,17 +75,17 @@ PAGE_SIZE = 100                      # max rows per search response observed to 
 # Politeness: human-like pacing between requests (seconds). A random jitter in
 # [min, max] is slept between each list page / detail fetch to avoid the
 # machine-regular timing that Imperva's behavioural layer flags.
-DELAY_MIN_S = float(os.getenv("IAAI_DELAY_MIN", "1.5"))
-DELAY_MAX_S = float(os.getenv("IAAI_DELAY_MAX", "3.5"))
+DELAY_MIN_S = _env_float("IAAI_DELAY_MIN", 1.5)
+DELAY_MAX_S = _env_float("IAAI_DELAY_MAX", 3.5)
 
 # Safeguards against runaway loops. The full Canada inventory is ~5k lots
 # (~52 pages); this cap is a hard stop well above that so a pagination bug can
 # never loop forever.
-MAX_LIST_PAGES = int(os.getenv("IAAI_MAX_LIST_PAGES", "200"))
+MAX_LIST_PAGES = _env_int("IAAI_MAX_LIST_PAGES", 200)
 
 # Retries with exponential backoff for transient errors / soft blocks.
-MAX_RETRIES = int(os.getenv("IAAI_MAX_RETRIES", "4"))
-BACKOFF_BASE_S = float(os.getenv("IAAI_BACKOFF_BASE", "4.0"))
+MAX_RETRIES = _env_int("IAAI_MAX_RETRIES", 4)
+BACKOFF_BASE_S = _env_float("IAAI_BACKOFF_BASE", 4.0)
 
 # Detail-page enrichment is OFF by default: it multiplies request volume (one
 # request per lot) and therefore anti-bot exposure and runtime. The list row is
@@ -77,7 +102,7 @@ PROXY_SERVER = os.getenv("IAAI_PROXY", "") or None
 LOCALE = "en-CA"
 TIMEZONE = "America/Toronto"
 # Max time to wait for the Incapsula JS challenge to clear, in seconds.
-CHALLENGE_TIMEOUT_S = int(os.getenv("IAAI_CHALLENGE_TIMEOUT", "45"))
+CHALLENGE_TIMEOUT_S = _env_int("IAAI_CHALLENGE_TIMEOUT", 45)
 
 # --------------------------------------------------------------------------- #
 # Storage paths

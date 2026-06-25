@@ -29,8 +29,8 @@ def _setup_logging(verbose: bool) -> None:
 
 @app.command()
 def crawl(
-    max_pages: int = typer.Option(config.MAX_LIST_PAGES, help="hard cap on list pages"),
-    page_size: int = typer.Option(config.PAGE_SIZE, help="rows per page (<=100)"),
+    max_pages: int = typer.Option(config.MAX_LIST_PAGES, min=1, help="hard cap on list pages"),
+    page_size: int = typer.Option(config.PAGE_SIZE, min=1, max=100, help="rows per page (<=100)"),
     enrich: bool = typer.Option(config.ENRICH_DETAILS, help="fetch detail pages too"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:

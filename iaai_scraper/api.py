@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 
 from . import config
 from .storage import SqliteStore
@@ -23,8 +23,8 @@ app = FastAPI(title="IAAI Ontario Lots API", version="0.1.0")
 
 
 def _store() -> SqliteStore:
-    # One short-lived connection per request keeps SQLite access simple + safe.
-    return SqliteStore()
+    # Resolve DB path at call time so env overrides and tests see the right file.
+    return SqliteStore(db_path=config.DB_PATH)
 
 
 def _hydrate(row: dict[str, Any]) -> dict[str, Any]:
@@ -43,6 +43,19 @@ def _hydrate(row: dict[str, Any]) -> dict[str, Any]:
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/readyz")
+def readyz(response: Response) -> dict[str, Any]:
+    store = _store()
+    try:
+        n = store.conn.execute("SELECT COUNT(*) AS n FROM lots").fetchone()["n"]
+        return {"status": "ready", "lots": n}
+    except Exception as e:  # noqa: BLE001
+        response.status_code = 503
+        return {"status": "unavailable", "error": str(e)}
+    finally:
+        store.close()
 
 
 @app.get("/stats")
@@ -73,12 +86,14 @@ def list_lots(
     auction_date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
     runs: Optional[bool] = None,
     keyword: Optional[str] = Query(None, description="match make/model/damage"),
+    status: str = Query("all", description="active | sold | if_bid | passed | removed | all"),
     sort: str = Query("auction_date"),
     descending: bool = False,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
     filters = {
+        "status": status,
         "make": make, "model": model, "branch_id": branch_id, "province": province,
         "title_brand_type": title_brand_type, "auction_type": auction_type,
         "year_min": year_min, "year_max": year_max,

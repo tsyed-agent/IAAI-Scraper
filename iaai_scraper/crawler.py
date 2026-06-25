@@ -18,6 +18,7 @@ Safeguards:
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
@@ -43,6 +44,7 @@ class CrawlReport:
     updated: int = 0
     unchanged: int = 0
     skipped_bad_rows: int = 0
+    archived: int = 0
     status: str = "running"
     note: str = ""
     ontario_by_branch: dict[str, int] = field(default_factory=dict)
@@ -52,7 +54,7 @@ class CrawlReport:
             f"status={self.status} pages={self.pages} canada_seen={self.canada_rows_seen}"
             f"/{self.total_canada} ontario={self.ontario_seen} "
             f"(ins={self.inserted} upd={self.updated} unch={self.unchanged} "
-            f"bad={self.skipped_bad_rows})"
+            f"bad={self.skipped_bad_rows} archived={self.archived})"
         )
 
 
@@ -62,6 +64,15 @@ class Crawler:
 
     async def run(self) -> CrawlReport:
         report = CrawlReport(started_at=datetime.now(timezone.utc))
+        config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        lock_path = config.DATA_DIR / "crawl.lock"
+        try:
+            lock_fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            raise RuntimeError(
+                f"Another crawl appears to be running (lock: {lock_path}). "
+                f"Delete it if stale.")
+        os.close(lock_fd)
         store = SqliteStore()
         raw = RawWriter()
         seen_stock: set[str] = set()           # dedup + loop guard across the whole run
@@ -80,17 +91,21 @@ class Crawler:
                         log.info("Page %d returned 0 rows -> end of results", page)
                         break
 
-                    new_on_page = await self._process_page(
+                    new_on_page, parsed_on_page = await self._process_page(
                         rows, seen_stock, store, raw, report, session
                     )
                     report.pages = page
                     report.canada_rows_seen = len(seen_stock)
                     store.commit()
-                    log.info("Page %d: %d rows, %d new (running ontario=%d, canada=%d/%s)",
-                             page, len(rows), new_on_page, report.ontario_seen,
+                    raw.flush()
+                    log.info("Page %d: %d rows, %d new, %d parsed (ontario=%d, canada=%d/%s)",
+                             page, len(rows), new_on_page, parsed_on_page, report.ontario_seen,
                              len(seen_stock), report.total_canada)
 
                     # --- stop conditions -------------------------------- #
+                    if parsed_on_page == 0:
+                        raise RuntimeError(
+                            f"page {page}: {len(rows)} rows but none parsed (schema drift?)")
                     if new_on_page == 0:
                         log.info("No new stock numbers on page %d -> stopping (loop guard)", page)
                         break
@@ -109,6 +124,9 @@ class Crawler:
                     log.warning(report.note)
 
             report.status = self._final_status(report)
+            if report.status == "completed":
+                report.archived = store.archive_missing(seen_stock)
+                log.info("Archived %d lots no longer listed", report.archived)
         except Exception as e:  # noqa: BLE001 - record failure, don't crash silently
             report.status = "failed"
             report.note = f"{type(e).__name__}: {e}"
@@ -119,21 +137,29 @@ class Crawler:
             store.record_run(
                 started_at=report.started_at, finished_at=report.finished_at,
                 total_canada=report.total_canada, ontario_seen=report.ontario_seen,
-                inserted=report.inserted, updated=report.updated, pages=report.pages,
-                status=report.status, note=report.note,
+                inserted=report.inserted, updated=report.updated,
+                unchanged=report.unchanged, skipped_bad_rows=report.skipped_bad_rows,
+                canada_rows_seen=report.canada_rows_seen, archived=report.archived,
+                pages=report.pages, status=report.status, note=report.note,
             )
             store.close()
+            try:
+                os.unlink(lock_path)
+            except OSError:
+                pass
         log.info("Crawl done: %s", report.summary())
         return report
 
-    async def _process_page(self, rows, seen_stock, store, raw, report, session) -> int:
-        """Parse + filter + store one page. Returns count of new stock numbers seen."""
+    async def _process_page(self, rows, seen_stock, store, raw, report, session) -> tuple[int, int]:
+        """Parse + filter + store one page. Returns (new_stock_count, parsed_ok_count)."""
         new_count = 0
+        parsed_ok = 0
         for row in rows:
             lot = parse_row(row)
             if lot is None:
                 report.skipped_bad_rows += 1
                 continue
+            parsed_ok += 1
 
             # Dedup / loop guard: only act on stock numbers not yet seen this run.
             if lot.stock_number in seen_stock:
@@ -141,7 +167,9 @@ class Crawler:
             seen_stock.add(lot.stock_number)
             new_count += 1
 
-            # Keep only Ontario lots.
+            # Raw audit/replay: persist every unique Canada row (pre-Ontario-filter).
+            raw.write(row)
+
             if not self.settings.is_ontario(lot.branch_id, lot.branch_name):
                 continue
 
@@ -155,7 +183,6 @@ class Crawler:
                 lot = await detail.enrich(session, lot)
                 await session.polite_delay()
 
-            raw.write(row)
             outcome = store.upsert_lot(lot)
             if outcome == "inserted":
                 report.inserted += 1
@@ -163,7 +190,7 @@ class Crawler:
                 report.updated += 1
             else:
                 report.unchanged += 1
-        return new_count
+        return new_count, parsed_ok
 
     @staticmethod
     def _final_status(report: CrawlReport) -> str:

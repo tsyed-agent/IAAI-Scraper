@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import re
 from typing import Any, Optional
 
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
@@ -74,7 +75,8 @@ class IaaiSession:
         }
         if config.PROXY_SERVER:
             launch_kwargs["proxy"] = {"server": config.PROXY_SERVER}
-            log.info("Using proxy %s", config.PROXY_SERVER)
+            safe = re.sub(r"//[^@]+@", "//***@", config.PROXY_SERVER)
+            log.info("Using proxy %s", safe)
 
         self._browser = await self._pw.chromium.launch(**launch_kwargs)
         self._context = await self._browser.new_context(

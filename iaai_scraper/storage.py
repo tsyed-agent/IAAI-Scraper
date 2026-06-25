@@ -44,14 +44,28 @@ class RawWriter:
         log.info("Raw landing file: %s", self.path)
 
     def write(self, raw_row: dict[str, Any]) -> None:
+        if self._fh is None:
+            self._fh = gzip.open(self.path, "at", encoding="utf-8")
         self._fh.write(json.dumps(raw_row, ensure_ascii=False, default=str) + "\n")
         self.count += 1
 
+    def flush(self) -> None:
+        """Push buffered rows to disk. Gzip needs the member closed before readers can parse."""
+        try:
+            if self._fh is not None:
+                self._fh.flush()
+                self._fh.close()
+                self._fh = None
+        except Exception as e:  # pragma: no cover
+            log.warning("RawWriter.flush failed: %s", e)
+
     def close(self) -> None:
         try:
-            self._fh.close()
-        except Exception:
-            pass
+            if self._fh is not None:
+                self._fh.close()
+                self._fh = None
+        except Exception as e:
+            log.warning("RawWriter.close failed for %s: %s", self.path, e)
 
 
 # --------------------------------------------------------------------------- #
@@ -373,6 +387,10 @@ class SqliteStore:
     def _build_where(filters: dict[str, Any]) -> tuple[str, list[Any]]:
         clauses: list[str] = []
         params: list[Any] = []
+        status = filters.get("status")
+        if status and str(status).lower() != "all":
+            clauses.append("LOWER(status) = LOWER(?)")
+            params.append(str(status))
         eq = {"make": "make", "model": "model", "branch_id": "branch_id",
               "province": "province", "title_brand_type": "title_brand_type",
               "auction_type": "auction_type"}
