@@ -12,6 +12,8 @@ from __future__ import annotations
 import gzip
 import json
 import logging
+import os
+import shutil
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,31 +41,28 @@ class RawWriter:
         self.dir = base_dir / day
         self.dir.mkdir(parents=True, exist_ok=True)
         self.path = self.dir / f"run-{ts}.jsonl.gz"
-        self._fh = gzip.open(self.path, "wt", encoding="utf-8")
+        self._staging = self.path.with_suffix("")  # plain JSONL until close gzips it
+        self._fh = open(self._staging, "a", encoding="utf-8")
         self.count = 0
         log.info("Raw landing file: %s", self.path)
 
     def write(self, raw_row: dict[str, Any]) -> None:
-        if self._fh is None:
-            self._fh = gzip.open(self.path, "at", encoding="utf-8")
         self._fh.write(json.dumps(raw_row, ensure_ascii=False, default=str) + "\n")
         self.count += 1
 
     def flush(self) -> None:
-        """Push buffered rows to disk. Gzip needs the member closed before readers can parse."""
         try:
-            if self._fh is not None:
-                self._fh.flush()
-                self._fh.close()
-                self._fh = None
+            self._fh.flush()
+            os.fsync(self._fh.fileno())
         except Exception as e:  # pragma: no cover
             log.warning("RawWriter.flush failed: %s", e)
 
     def close(self) -> None:
         try:
-            if self._fh is not None:
-                self._fh.close()
-                self._fh = None
+            self._fh.close()
+            with open(self._staging, "rb") as src, gzip.open(self.path, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+            self._staging.unlink(missing_ok=True)
         except Exception as e:
             log.warning("RawWriter.close failed for %s: %s", self.path, e)
 
