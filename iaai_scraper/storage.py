@@ -159,9 +159,12 @@ CREATE INDEX IF NOT EXISTS idx_lots_vin             ON lots (vin);
 CREATE INDEX IF NOT EXISTS idx_lots_status          ON lots (status);
 """
 
-# Change-tracked columns: if any differ on re-scrape, bump last_changed.
-_CHANGE_COLS = ("auction_date", "buy_now_price", "high_prebid", "auction_name", "lane",
-                "primary_damage", "secondary_damage")
+# Housekeeping/derived columns excluded from change comparison.
+_NO_COMPARE = {
+    "stock_number", "first_seen", "last_seen", "last_changed", "source", "raw",
+    "status_updated_at", "delisted_at",
+}
+_COMPARE_COLS = [c for c in _COLUMNS if c not in _NO_COMPARE]
 
 _MIGRATIONS = {
     "lots": {
@@ -277,13 +280,17 @@ class SqliteStore:
         if existing is None:
             data["first_seen"] = now
             data["last_changed"] = now
+            data["status_updated_at"] = now
+            data["delisted_at"] = None
             self._insert(data)
             return "inserted"
 
-        # Determine whether any tracked field changed.
-        changed = any(_to_db_value(data.get(c)) != existing[c] for c in _CHANGE_COLS)
-        data["first_seen"] = existing["first_seen"]  # preserve original
+        changed = any(_to_db_value(data.get(c)) != existing[c] for c in _COMPARE_COLS)
+        status_changed = data.get("status") != existing["status"]
+        data["first_seen"] = existing["first_seen"]
         data["last_changed"] = now if changed else existing["last_changed"]
+        data["status_updated_at"] = now if status_changed else existing["status_updated_at"]
+        data["delisted_at"] = None
         self._update(data)
         return "updated" if changed else "unchanged"
 

@@ -82,3 +82,29 @@ def test_upsert_lifecycle(tmp_path):
     # first_seen preserved across updates
     assert store.get_lot("12637338")["first_seen"] is not None
     store.close()
+
+
+def test_upsert_persists_status_active_then_sold(tmp_path):
+    from tests.conftest import make_row
+    db = tmp_path / "t.db"
+    store = SqliteStore(db_path=db)
+    assert store.upsert_lot(parse_row(make_row("3003", ItemStatusDesc=""))) == "inserted"
+    assert store.get_lot("3003")["status"] == "active"
+
+    out = store.upsert_lot(parse_row(make_row("3003", ItemStatusDesc="Sold", HighPrebidValue=4000)))
+    rec = store.get_lot("3003")
+    assert out == "updated"
+    assert rec["status"] == "sold"
+    assert rec["final_price"] == 4000.0
+    assert rec["status_updated_at"] is not None
+    store.close()
+
+
+def test_change_detection_on_untracked_field(tmp_path):
+    from tests.conftest import make_row
+    db = tmp_path / "t.db"
+    store = SqliteStore(db_path=db)
+    store.upsert_lot(parse_row(make_row("4004", Model="RVR ES AWC")))
+    out = store.upsert_lot(parse_row(make_row("4004", Model="OUTLANDER")))
+    assert out == "updated"
+    store.close()
