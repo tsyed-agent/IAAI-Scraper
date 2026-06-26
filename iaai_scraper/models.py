@@ -48,6 +48,7 @@ class Lot(BaseModel):
     branch_id: Optional[int] = None                # StockBranchId (Ontario classifier)
     branch_name: Optional[str] = None              # StockBranchDescription
     location: Optional[str] = None                 # VehicleLocation "City, PROV"
+    location_name: Optional[str] = None            # LocationName (yard name)
     province: Optional[str] = None                 # derived 2-letter code
 
     # --- auction / sale -------------------------------------------------- #
@@ -57,10 +58,21 @@ class Lot(BaseModel):
     auction_datetime_display: Optional[str] = None
     auction_datetime_utc: Optional[datetime] = None
     auction_type: Optional[str] = None             # PUBLIC / ...
+    auction_type_id: Optional[int] = None
+    auction_type_desc: Optional[str] = None
+    auction_branch_id: Optional[int] = None
+    auction_branch_name: Optional[str] = None
+    auction_status_id: Optional[int] = None
+    is_auction_closed: Optional[bool] = None
+    is_regular_auction: Optional[bool] = None
+    auction_offsite: Optional[bool] = None
     lane: Optional[str] = None
     sequence: Optional[int] = None
     is_timed_auction: Optional[bool] = None
+    timed_auction_status: Optional[str] = None
     buy_now_price: Optional[float] = None
+    buy_now_offer_price: Optional[float] = None
+    timed_buy_now_price: Optional[float] = None
     high_prebid: Optional[float] = None
     timed_high_bid: Optional[float] = None
     winning_bid: Optional[float] = None
@@ -71,11 +83,18 @@ class Lot(BaseModel):
     item_status_desc: Optional[str] = None       # Sold / IfBid / Pass / empty
     prebid_item_status_desc: Optional[str] = None
     prebid_item_status_id: Optional[int] = None
+    prebid_allowed: Optional[bool] = None
+    prebid_closed: Optional[bool] = None
+    buy_now_status: Optional[str] = None
+    is_buy_now: Optional[bool] = None
+    buy_now_allowed: Optional[bool] = None
     final_price: Optional[float] = None          # best anonymous sale/bid signal
     bid_closes_at: Optional[datetime] = None
+    server_observed_at: Optional[datetime] = None  # ServerCurrentDateUTC from row
     last_price_at: Optional[datetime] = None     # when any tracked price last changed
     status_updated_at: Optional[datetime] = None
     delisted_at: Optional[datetime] = None
+    image_url: Optional[str] = None                # thumbnail URL only (not downloaded)
 
     # --- provenance / housekeeping -------------------------------------- #
     source: str = "ca.iaai.com"

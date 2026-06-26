@@ -38,7 +38,11 @@ def _hydrate(row: dict[str, Any]) -> dict[str, Any]:
             row["raw"] = json.loads(row["raw"])
         except (json.JSONDecodeError, TypeError):
             pass
-    for b in ("runs", "starts", "has_keys", "is_timed_auction"):
+    for b in (
+        "runs", "starts", "has_keys", "is_timed_auction",
+        "is_auction_closed", "is_regular_auction", "auction_offsite",
+        "prebid_allowed", "prebid_closed", "is_buy_now", "buy_now_allowed",
+    ):
         if row.get(b) is not None:
             row[b] = bool(row[b])
     return row

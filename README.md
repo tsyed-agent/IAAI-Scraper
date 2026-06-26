@@ -91,6 +91,7 @@ completeness checks), usage, results, and limitations are documented in
 | [`docs/04-data-model.md`](docs/04-data-model.md) | Lot schema, SQLite DDL. |
 | [`docs/05-implementation.md`](docs/05-implementation.md) | **How the built scraper works, anti-detection, safeguards, usage, results.** |
 | [`docs/06-realtime-archive-infrastructure.md`](docs/06-realtime-archive-infrastructure.md) | **Real-time price + historical archive: free-infra research & recommendation.** |
+| [`docs/07-live-verification.md`](docs/07-live-verification.md) | **Live E2E verification of Ontario-at-source crawl (2026-06-26).** |
 
 ## Project layout
 
