@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IAAI-Scraper — Project Dashboard</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #232733;
+      --border: #2e3344;
+      --text: #e8eaed;
+      --muted: #9aa0b0;
+      --accent: #6c9eff;
+      --accent-dim: #4a7fd4;
+      --green: #3dd68c;
+      --green-dim: #2a9d63;
+      --yellow: #f5c542;
+      --orange: #f59e42;
+      --red: #f87171;
+      --purple: #a78bfa;
+      --radius: 10px;
+      --shadow: 0 4px 24px rgba(0,0,0,.35);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Header & Nav ── */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(15,17,23,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 1.5rem;
+    }
+    .header-inner {
+      max-width: 1280px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px; gap: 1rem;
+    }
+    .logo { font-weight: 700; font-size: 1.05rem; white-space: nowrap; }
+    .logo span { color: var(--accent); }
+    nav { display: flex; gap: .25rem; overflow-x: auto; }
+    nav a {
+      color: var(--muted); text-decoration: none; font-size: .85rem;
+      padding: .4rem .75rem; border-radius: 6px; white-space: nowrap;
+      transition: color .15s, background .15s;
+    }
+    nav a:hover, nav a.active { color: var(--text); background: var(--surface2); }
+
+    /* ── Layout ── */
+    main { max-width: 1280px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    section { display: none; animation: fadeIn .25s ease; }
+    section.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    h1 { font-size: 1.75rem; margin-bottom: .5rem; }
+    h2 { font-size: 1.25rem; margin: 2rem 0 .75rem; color: var(--accent); }
+    h3 { font-size: 1rem; margin: 1.25rem 0 .5rem; }
+    .subtitle { color: var(--muted); font-size: .95rem; margin-bottom: 1.5rem; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem; box-shadow: var(--shadow);
+    }
+    .card-grid { display: grid; gap: 1rem; }
+    @media (min-width: 640px) { .card-grid.cols-2 { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 900px) { .card-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; } }
+
+    /* ── Vision cards ── */
+    .vision-card { border-left: 3px solid var(--accent); }
+    .vision-card h3 { margin-top: 0; }
+    .pill {
+      display: inline-block; font-size: .72rem; font-weight: 600;
+      padding: .15rem .55rem; border-radius: 99px; margin-right: .35rem;
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .pill.done { background: rgba(61,214,140,.15); color: var(--green); }
+    .pill.planned { background: rgba(108,158,255,.15); color: var(--accent); }
+    .pill.partial { background: rgba(245,197,66,.15); color: var(--yellow); }
+
+    ul.feature-list { list-style: none; padding: 0; }
+    ul.feature-list li {
+      padding: .45rem 0 .45rem 1.4rem; position: relative;
+      border-bottom: 1px solid var(--border);
+    }
+    ul.feature-list li:last-child { border-bottom: none; }
+    ul.feature-list li::before {
+      content: "→"; position: absolute; left: 0; color: var(--accent);
+    }
+
+    /* ── PRD ── */
+    .spec-table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+    .spec-table th, .spec-table td {
+      text-align: left; padding: .6rem .75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .spec-table th { color: var(--muted); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
+    .spec-table tr:hover td { background: var(--surface2); }
+    .doc-link { color: var(--accent); text-decoration: none; }
+    .doc-link:hover { text-decoration: underline; }
+
+    /* ── PM Dashboard ── */
+    .overview-bar {
+      display: grid; gap: 1rem; margin-bottom: 1.5rem;
+    }
+    @media (min-width: 700px) { .overview-bar { grid-template-columns: repeat(4, 1fr); } }
+
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1rem 1.25rem; text-align: center;
+    }
+    .stat-card .num { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+    .stat-card .label { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+    .stat-card.green .num { color: var(--green); }
+    .stat-card.yellow .num { color: var(--yellow); }
+    .stat-card.blue .num { color: var(--accent); }
+    .stat-card.purple .num { color: var(--purple); }
+
+    .progress-wrap { margin-bottom: 1.5rem; }
+    .progress-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: .35rem; font-size: .875rem;
+    }
+    .progress-header .pct { font-weight: 700; color: var(--accent); }
+    .progress-track {
+      height: 8px; background: var(--surface2); border-radius: 99px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+      transition: width .4s ease;
+    }
+    .progress-fill.high { background: linear-gradient(90deg, var(--green-dim), var(--green)); }
+
+    .category-block {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); margin-bottom: 1rem; overflow: hidden;
+    }
+    .category-header {
+      display: flex; align-items: center; gap: .75rem;
+      padding: .85rem 1.25rem; cursor: pointer; user-select: none;
+      background: var(--surface2); transition: background .15s;
+    }
+    .category-header:hover { background: #2a2f3d; }
+    .category-header .chevron {
+      transition: transform .2s; font-size: .75rem; color: var(--muted);
+    }
+    .category-header.open .chevron { transform: rotate(90deg); }
+    .category-title { flex: 1; font-weight: 600; font-size: .95rem; }
+    .category-meta { font-size: .78rem; color: var(--muted); }
+    .category-bar { width: 80px; }
+    .category-bar .progress-track { height: 5px; }
+    .category-body { display: none; padding: .5rem 0; }
+    .category-body.open { display: block; }
+
+    .task-row {
+      display: grid; grid-template-columns: 28px 1fr auto;
+      gap: .75rem; align-items: start;
+      padding: .65rem 1.25rem; border-bottom: 1px solid var(--border);
+      transition: background .12s;
+    }
+    .task-row:last-child { border-bottom: none; }
+    .task-row:hover { background: rgba(255,255,255,.02); }
+    .task-row.done { opacity: .65; }
+    .task-row.done .task-title { text-decoration: line-through; }
+
+    .task-check {
+      width: 20px; height: 20px; margin-top: 2px;
+      accent-color: var(--green); cursor: pointer;
+    }
+    .task-title { font-size: .9rem; font-weight: 500; }
+    .task-desc { font-size: .8rem; color: var(--muted); margin-top: .15rem; }
+    .task-tags { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .35rem; }
+    .tag {
+      font-size: .68rem; padding: .1rem .45rem; border-radius: 4px;
+      background: var(--surface2); color: var(--muted); border: 1px solid var(--border);
+    }
+    .tag.spec { color: var(--purple); border-color: rgba(167,139,250,.3); }
+    .tag.doc { color: var(--accent); border-color: rgba(108,158,255,.3); cursor: pointer; }
+    .tag.doc:hover { background: rgba(108,158,255,.1); }
+
+    .status-badge {
+      font-size: .68rem; font-weight: 600; padding: .2rem .5rem;
+      border-radius: 4px; white-space: nowrap; text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .status-badge.done { background: rgba(61,214,140,.15); color: var(--green); }
+    .status-badge.partial { background: rgba(245,197,66,.15); color: var(--yellow); }
+    .status-badge.planned { background: rgba(108,158,255,.12); color: var(--accent); }
+    .status-badge.in_progress { background: rgba(245,158,66,.15); color: var(--orange); }
+
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.25rem; align-items: center;
+    }
+    .toolbar label { font-size: .82rem; color: var(--muted); }
+    .toolbar select, .toolbar button {
+      background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+      border-radius: 6px; padding: .4rem .75rem; font-size: .82rem; cursor: pointer;
+    }
+    .toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+
+    .roadmap-timeline { position: relative; padding-left: 1.5rem; }
+    .roadmap-timeline::before {
+      content: ""; position: absolute; left: 6px; top: 0; bottom: 0;
+      width: 2px; background: var(--border);
+    }
+    .roadmap-item {
+      position: relative; margin-bottom: 1.25rem; padding-left: 1rem;
+    }
+    .roadmap-item::before {
+      content: ""; position: absolute; left: -1.15rem; top: .45rem;
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--border); border: 2px solid var(--bg);
+    }
+    .roadmap-item.done::before { background: var(--green); }
+    .roadmap-item.active::before { background: var(--yellow); box-shadow: 0 0 0 3px rgba(245,197,66,.25); }
+    .roadmap-item.future::before { background: var(--border); }
+
+    .arch-diagram {
+      background: var(--surface2); border-radius: var(--radius);
+      padding: 1.25rem; font-family: "SF Mono", "Fira Code", monospace;
+      font-size: .78rem; line-height: 1.5; overflow-x: auto; white-space: pre;
+      color: var(--muted); border: 1px solid var(--border);
+    }
+
+    .reset-note {
+      font-size: .78rem; color: var(--muted); margin-top: 1rem;
+      padding: .75rem 1rem; background: var(--surface2); border-radius: 6px;
+      border: 1px dashed var(--border);
+    }
+
+    footer {
+      text-align: center; padding: 2rem; color: var(--muted); font-size: .78rem;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo">IAAI<span>-Scraper</span> Dashboard</div>
+    <nav>
+      <a href="#vision" class="nav-link active" data-section="vision">Vision</a>
+      <a href="#prd" class="nav-link" data-section="prd">PRD &amp; Specs</a>
+      <a href="#pm" class="nav-link" data-section="pm">Project Board</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECTION 1 — VISION (non-technical)
+     ═══════════════════════════════════════════════════════════ -->
+<section id="vision" class="active">
+  <h1>Project Vision</h1>
+  <p class="subtitle">What we're building, why it matters, and the features we're seeking to accomplish — in plain language.</p>
+
+  <div class="card vision-card">
+    <h3>Mission</h3>
+    <p>Build a reliable <strong>internal data collection system</strong> for IAA/IAAI Canada vehicle auctions, scoped to <strong>Ontario</strong>. The system collects structured auction lot data, stores it in a searchable database, and exposes it through an internal API — optimized for completeness, speed, reliability, and cost. Images are intentionally <em>not</em> collected.</p>
+  </div>
+
+  <h2>What We're Trying to Accomplish</h2>
+  <div class="card-grid cols-2">
+    <div class="card vision-card">
+      <h3>Never Go Stale</h3>
+      <p>Maintain a permanent historical archive of every Ontario lot and what it sold for. Full metadata snapshots every 12 hours; pricing as close to real-time as free infrastructure allows.</p>
+      <span class="pill planned">Future goal</span>
+    </div>
+    <div class="card vision-card">
+      <h3>Complete Ontario Coverage</h3>
+      <p>Capture all ~1,450 active lots across 7 Ontario branches (London, Toronto, Hamilton, Ottawa, Sudbury, and more) with every available field preserved.</p>
+      <span class="pill done">Working today</span>
+    </div>
+    <div class="card vision-card">
+      <h3>Searchable &amp; Filterable</h3>
+      <p>Query lots by make, model, year, branch, damage, title type, sale status, and more through a clean internal API — no manual browsing of the IAAI website.</p>
+      <span class="pill done">Working today</span>
+    </div>
+    <div class="card vision-card">
+      <h3>Cost-Efficient &amp; Sustainable</h3>
+      <p>Run on completely free infrastructure. Ontario-only scope, no image downloads, incremental updates, and deduplication keep bandwidth and storage minimal.</p>
+      <span class="pill partial">In progress</span>
+    </div>
+  </div>
+
+  <h2>Core Features</h2>
+  <div class="card">
+    <ul class="feature-list">
+      <li><strong>Automated lot collection</strong> — Crawl IAAI Canada auction listings without manual intervention, passing anti-bot protections automatically.</li>
+      <li><strong>Structured data storage</strong> — Every lot normalized into a typed schema with full raw payload preserved for audit and re-parsing.</li>
+      <li><strong>Lifecycle tracking</strong> — Know whether a lot is active, sold, if-bid, passed, or removed from inventory.</li>
+      <li><strong>Price awareness</strong> — Capture pre-bids, timed auction bids, buy-now prices, and final sale outcomes.</li>
+      <li><strong>Internal read API</strong> — FastAPI endpoints for querying, filtering, sorting, and retrieving individual lots.</li>
+      <li><strong>Historical archive</strong> — Lots are never deleted; sold and delisted vehicles remain queryable forever.</li>
+      <li><strong>Price history time series</strong> — Track how a lot's price moved over time (planned — not yet built).</li>
+      <li><strong>Scheduled refresh</strong> — Automatic periodic crawls at full-metadata and price-only cadences (planned).</li>
+    </ul>
+  </div>
+
+  <h2>Design Principles</h2>
+  <div class="card-grid cols-2">
+    <div class="card"><h3>Completeness</h3><p>Capture every available lot field. Nothing silently dropped — the full raw row is always preserved alongside normalized columns.</p></div>
+    <div class="card"><h3>Speed</h3><p>Solve the anti-bot challenge once per session, then fetch fast. Ontario-at-source filtering cuts requests by 25×.</p></div>
+    <div class="card"><h3>Reliability</h3><p>Idempotent, resumable, observable. Survives blocks and restarts with automatic re-solve and retry logic.</p></div>
+    <div class="card"><h3>Cost Efficiency</h3><p>Ontario-only, no images, incremental upserts, dedup. Designed to run sustainably on free infrastructure.</p></div>
+  </div>
+
+  <h2>What We're NOT Building</h2>
+  <div class="card">
+    <ul class="feature-list">
+      <li>Image collection or download (URLs preserved in raw data only)</li>
+      <li>Public-facing product or consumer UI</li>
+      <li>Full VIN access (masked for anonymous users; requires logged-in buyer account)</li>
+      <li>Official IAAI API integration (no public API exists — we scrape)</li>
+    </ul>
+  </div>
+
+  <h2>Roadmap at a Glance</h2>
+  <div class="card">
+    <div class="roadmap-timeline">
+      <div class="roadmap-item done">
+        <strong>Phase 0 — Spike</strong>
+        <p style="color:var(--muted);font-size:.875rem;">Prove Imperva bypass works. Discover data endpoints. Dump sample JSON.</p>
+      </div>
+      <div class="roadmap-item active">
+        <strong>Phase 1 — MVP Pipeline</strong>
+        <p style="color:var(--muted);font-size:.875rem;">Session manager + crawlers + JSONL + SQLite + FastAPI. Full Ontario inventory queryable via API.</p>
+      </div>
+      <div class="roadmap-item future">
+        <strong>Phase 2 — Reliability &amp; Scale</strong>
+        <p style="color:var(--muted);font-size:.875rem;">Proxy rotation, PostgreSQL, sale history, metrics, resumability.</p>
+      </div>
+      <div class="roadmap-item future">
+        <strong>Phase 3 — Hardening &amp; Ops</strong>
+        <p style="color:var(--muted);font-size:.875rem;">Containerize, secrets, observability, cost monitoring, build-vs-buy review.</p>
+      </div>
+      <div class="roadmap-item future">
+        <strong>Real-Time Archive</strong>
+        <p style="color:var(--muted);font-size:.875rem;">Price history, two-cadence scheduler, free-infra deployment, sold archive API.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECTION 2 — PRD & TECHNICAL SPECS
+     ═══════════════════════════════════════════════════════════ -->
+<section id="prd">
+  <h1>PRD &amp; Technical Specifications</h1>
+  <p class="subtitle">Architecture, data model, API contracts, and technical decisions — the spec-driven layout.</p>
+
+  <h2>Architecture</h2>
+  <div class="arch-diagram">┌─────────────────────────────────────────────────────────┐
+│                    Orchestrator / Scheduler                │
+│         (cron, APScheduler, systemd — planned)             │
+└────────────────────────┬────────────────────────────────┘
+                         │
+         ┌───────────────┼───────────────┐
+         ▼               ▼               ▼
+┌─────────────┐  ┌──────────────┐  ┌──────────────┐
+│  Session     │  │ List Crawler  │  │ Detail Crawler│
+│  Manager     │→ │ (paginate     │→ │ (VDP enrich,  │
+│  (Playwright │  │  Search API)  │  │  optional)    │
+│  + Imperva)  │  └──────┬───────┘  └──────┬───────┘
+└─────────────┘         │                  │
+                        ▼                  ▼
+              ┌─────────────────────────────────┐
+              │     Raw Landing Layer (JSONL)      │
+              │   data/raw/YYYY-MM-DD/run-*.gz    │
+              └──────────────┬──────────────────┘
+                             │ parse + normalize
+                             ▼
+              ┌─────────────────────────────────┐
+              │   Normalizer / Loader (Pydantic)   │
+              │   upsert, dedup, lifecycle         │
+              └──────────────┬──────────────────┘
+                             ▼
+              ┌─────────────────────────────────┐
+              │   Serving DB (SQLite → Postgres) │
+              └──────────────┬──────────────────┘
+                             ▼
+              ┌─────────────────────────────────┐
+              │   Internal API (FastAPI)         │
+              │   query / filter / retrieve      │
+              └─────────────────────────────────┘</div>
+
+  <h2>Tech Stack</h2>
+  <div class="card">
+    <table class="spec-table">
+      <thead><tr><th>Concern</th><th>Choice</th><th>Status</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Language</td><td>Python 3.11+</td><td><span class="pill done">Active</span></td><td>Best scraping + data ecosystem</td></tr>
+        <tr><td>Browser / anti-bot</td><td>Playwright (Chromium)</td><td><span class="pill done">Active</span></td><td>In-page fetch() after Imperva solve</td></tr>
+        <tr><td>HTTP (bulk)</td><td>httpx</td><td><span class="pill planned">Planned</span></td><td>Original plan; built with in-page fetch instead</td></tr>
+        <tr><td>Validation</td><td>Pydantic v2</td><td><span class="pill done">Active</span></td><td>Schema + normalization via Lot model</td></tr>
+        <tr><td>Raw store</td><td>gzip JSONL</td><td><span class="pill done">Active</span></td><td>Append-only audit trail, replayable</td></tr>
+        <tr><td>Serving DB</td><td>SQLite → PostgreSQL</td><td><span class="pill partial">SQLite only</span></td><td>Postgres migration planned for Phase 2</td></tr>
+        <tr><td>API</td><td>FastAPI + Uvicorn</td><td><span class="pill done">Active</span></td><td>Read-only, auto OpenAPI docs at /docs</td></tr>
+        <tr><td>Scheduling</td><td>APScheduler / cron</td><td><span class="pill planned">Planned</span></td><td>Two-cadence: full (12h) + price (2–15 min)</td></tr>
+        <tr><td>Proxies</td><td>Residential pool</td><td><span class="pill partial">Config only</span></td><td>IAAI_PROXY env var; no rotation pool yet</td></tr>
+        <tr><td>Deployment</td><td>Own box / Oracle / GitHub Actions</td><td><span class="pill planned">Planned</span></td><td>See doc 06 for free-infra tiers</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Data Model</h2>
+  <div class="card-grid cols-2">
+    <div class="card">
+      <h3>Core Lot Fields (~35 normalized)</h3>
+      <p style="font-size:.875rem;color:var(--muted);">stock_number (PK), vin, year/make/model/trim, body_style, branch, province, auction_date, status, high_prebid, timed_high_bid, buy_now_price, final_price, primary/secondary_damage, title_type, odometer, run_and_drive, keys, engine, fuel_type, drivetrain, transmission, color, seller, acv, est_retail_value, repair_cost, first_seen, last_seen, last_changed, delisted_at, raw_json</p>
+    </div>
+    <div class="card">
+      <h3>Planned Additions</h3>
+      <p style="font-size:.875rem;color:var(--muted);">price_history table (append-on-change time series), winning_bid, bid_status, closes_at, last_price_at, closed_at. crawl_runs.run_type (full | price).</p>
+    </div>
+  </div>
+
+  <h2>Lifecycle Statuses</h2>
+  <div class="card">
+    <table class="spec-table">
+      <thead><tr><th>Status</th><th>Meaning</th><th>Trigger</th></tr></thead>
+      <tbody>
+        <tr><td><code>active</code></td><td>On market / upcoming</td><td>Empty ItemStatusDesc</td></tr>
+        <tr><td><code>sold</code></td><td>Sold at auction</td><td>ItemStatusDesc = Sold</td></tr>
+        <tr><td><code>if_bid</code></td><td>Conditional sale</td><td>ItemStatusDesc = IfBid</td></tr>
+        <tr><td><code>passed</code></td><td>Did not sell</td><td>ItemStatusDesc = Pass</td></tr>
+        <tr><td><code>removed</code></td><td>Vanished from snapshot</td><td>Was active, not seen in completed crawl</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>API Endpoints</h2>
+  <div class="card">
+    <table class="spec-table">
+      <thead><tr><th>Endpoint</th><th>Description</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /lots</code></td><td>Filter by make, model, year, branch, status, keyword, sort, pagination</td><td><span class="status-badge done">Done</span></td></tr>
+        <tr><td><code>GET /lots/{stock_number}</code></td><td>Full lot record by stock number</td><td><span class="status-badge done">Done</span></td></tr>
+        <tr><td><code>GET /branches</code></td><td>Ontario branch list with lot counts</td><td><span class="status-badge done">Done</span></td></tr>
+        <tr><td><code>GET /stats</code></td><td>DB statistics (counts, last crawl)</td><td><span class="status-badge done">Done</span></td></tr>
+        <tr><td><code>GET /healthz</code></td><td>Liveness probe</td><td><span class="status-badge done">Done</span></td></tr>
+        <tr><td><code>GET /readyz</code></td><td>Readiness (DB populated)</td><td><span class="status-badge done">Done</span></td></tr>
+        <tr><td><code>GET /filters</code></td><td>Facet / enum values for UI dropdowns</td><td><span class="status-badge planned">Planned</span></td></tr>
+        <tr><td><code>GET /lots/{stock}/price-history</code></td><td>Full price time series for a lot</td><td><span class="status-badge planned">Planned</span></td></tr>
+        <tr><td><code>GET /lots?status=sold&amp;sold_from=…</code></td><td>Query sold archive by date range</td><td><span class="status-badge planned">Planned</span></td></tr>
+        <tr><td><code>GET /stats/freshness</code></td><td>Last full + price sync time, lag</td><td><span class="status-badge planned">Planned</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Crawl Strategy</h2>
+  <div class="card-grid cols-2">
+    <div class="card">
+      <h3>Current (Built)</h3>
+      <ul class="feature-list">
+        <li>Crawl all Canada (~53 pages × 100 rows)</li>
+        <li>Filter to 7 Ontario branches client-side</li>
+        <li>Sort by STOCK ASC (zero page overlap)</li>
+        <li>~4m24s for full Ontario set (1,448 lots)</li>
+        <li>In-page fetch() via Playwright session</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Target (Doc 06)</h3>
+      <ul class="feature-list">
+        <li>BranchIds filter at source (Ontario only)</li>
+        <li>PageSize=1000 (2–3 requests total)</li>
+        <li>~20–30s for full Ontario snapshot</li>
+        <li>Two cadences: full (12h) + price (2–15 min)</li>
+        <li>Warm session reuse between refreshes</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Documentation Index</h2>
+  <div class="card">
+    <table class="spec-table">
+      <thead><tr><th>Doc</th><th>Covers</th></tr></thead>
+      <tbody>
+        <tr><td><a class="doc-link" href="01-research.md">01-research.md</a></td><td>Site profile, Imperva anti-bot, Ontario footprint, volume sizing, legal notes</td></tr>
+        <tr><td><a class="doc-link" href="02-architecture-and-plan.md">02-architecture-and-plan.md</a></td><td>Architecture diagram, components, tech stack, phased roadmap</td></tr>
+        <tr><td><a class="doc-link" href="03-storage-decision.md">03-storage-decision.md</a></td><td>JSON vs database decision rationale</td></tr>
+        <tr><td><a class="doc-link" href="04-data-model.md">04-data-model.md</a></td><td>Field catalogue, SQLite DDL, PostgreSQL notes</td></tr>
+        <tr><td><a class="doc-link" href="05-implementation.md">05-implementation.md</a></td><td>As-built guide: modules, anti-detection, safeguards, verified results</td></tr>
+        <tr><td><a class="doc-link" href="06-realtime-archive-infrastructure.md">06-realtime-archive-infrastructure.md</a></td><td>Real-time pricing + historical archive: free-infra research &amp; build order</td></tr>
+        <tr><td><a class="doc-link" href="reference/lot_field_analysis.md">reference/lot_field_analysis.md</a></td><td>Live field census, lifecycle/price mapping, parser priorities</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Open Questions</h2>
+  <div class="card">
+    <ul class="feature-list">
+      <li>Refresh cadence required — hourly? per branch sale day?</li>
+      <li>Need for long-term sold-price history vs current inventory only?</li>
+      <li>Acceptable monthly budget for proxies / managed scraping API?</li>
+      <li>Downstream API consumers / SLA requirements?</li>
+      <li>Acceptable approximation of live-lane hammer prices for anonymous tier?</li>
+      <li>Which free-infra deployment tier: own box, Oracle Cloud, or GitHub Actions?</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECTION 3 — PROJECT MANAGEMENT BOARD
+     ═══════════════════════════════════════════════════════════ -->
+<section id="pm">
+  <h1>Project Board</h1>
+  <p class="subtitle">Track specs, tasks, and progress across all categories. Check items off as you complete them — your progress is saved locally.</p>
+
+  <div class="overview-bar" id="overview-stats"></div>
+
+  <div class="progress-wrap">
+    <div class="progress-header"><span>Overall Progress</span><span class="pct" id="overall-pct">0%</span></div>
+    <div class="progress-track"><div class="progress-fill" id="overall-bar" style="width:0%"></div></div>
+  </div>
+
+  <div class="toolbar">
+    <label>Filter:</label>
+    <select id="filter-status">
+      <option value="all">All tasks</option>
+      <option value="done">Completed</option>
+      <option value="partial">Partial</option>
+      <option value="in_progress">In progress</option>
+      <option value="planned">Planned</option>
+      <option value="remaining">Remaining</option>
+    </select>
+    <button id="expand-all">Expand all</button>
+    <button id="collapse-all">Collapse all</button>
+    <button id="reset-progress">Reset checkmarks</button>
+  </div>
+
+  <div id="category-container"></div>
+
+  <div class="reset-note">
+    Checkmarks are saved in your browser's localStorage (<code>iaai-dashboard-v1</code>).
+    They persist across page reloads but are local to this browser. Use "Reset checkmarks" to restore defaults.
+  </div>
+</section>
+
+</main>
+
+<footer>IAAI-Scraper Project Dashboard &middot; Generated from docs/01–06 &middot; Last updated 2026-06-26</footer>
+
+<script>
+/* ── Task data ── */
+const CATEGORIES = [
+  {
+    id: "phase0",
+    title: "Phase 0 — Spike & Research",
+    doc: "01-research.md",
+    tasks: [
+      { id: "p0-imperva", title: "Pass Imperva/Incapsula challenge", desc: "Prove headless Chromium can solve the JS challenge and obtain valid cookies.", defaultStatus: "done", spec: "Session Manager", doc: "01-research.md" },
+      { id: "p0-endpoint", title: "Discover GetSearchResult data endpoint", desc: "POST /Search/GetSearchResult/ returns RunList + TOTAL_COUNT.", defaultStatus: "done", spec: "List Crawler", doc: "01-research.md" },
+      { id: "p0-pagination", title: "Validate STOCK ASC stable pagination", desc: "Zero page overlap vs 24% duplicates with default time-based sort.", defaultStatus: "done", spec: "List Crawler", doc: "05-implementation.md" },
+      { id: "p0-ontario", title: "Map Ontario branch IDs", desc: "7 branches: 10,52,56,61,64,70,71 — validated against StockBranchDescription.", defaultStatus: "done", spec: "Scope", doc: "01-research.md" },
+      { id: "p0-vdp", title: "Discover VDP detail page path", desc: "/Vehicles/VehicleDetails?stockno={StockNum}", defaultStatus: "done", spec: "Detail Crawler", doc: "05-implementation.md" },
+      { id: "p0-spike", title: "Phase 0 spike scripts", desc: "Throwaway exploration in spike/ directory.", defaultStatus: "done", spec: "Spike", doc: "05-implementation.md" },
+    ]
+  },
+  {
+    id: "phase1-core",
+    title: "Phase 1 — Core Pipeline (MVP)",
+    doc: "02-architecture-and-plan.md",
+    tasks: [
+      { id: "p1-session", title: "Playwright session manager", desc: "Launch Chromium, solve Imperva, in-page fetch(), retries, block detection, jitter.", defaultStatus: "done", spec: "session.py", doc: "05-implementation.md" },
+      { id: "p1-search", title: "Search client + pagination", desc: "Build GetSearchResult payload, paginate, extract authoritative total count.", defaultStatus: "done", spec: "search_client.py", doc: "05-implementation.md" },
+      { id: "p1-parser", title: "Parser + Lot model", desc: "Defensive normalization of raw row into typed Lot (~35 fields + raw payload).", defaultStatus: "done", spec: "parser.py / models.py", doc: "04-data-model.md" },
+      { id: "p1-storage", title: "JSONL + SQLite storage", desc: "Gzip JSONL landing layer + SQLite upsert with first_seen/last_seen/last_changed.", defaultStatus: "done", spec: "storage.py", doc: "03-storage-decision.md" },
+      { id: "p1-crawler", title: "Full Ontario crawl orchestrator", desc: "Completeness checks, dedup, loop guards, crawl lock, MAX_LIST_PAGES cap.", defaultStatus: "done", spec: "crawler.py", doc: "05-implementation.md" },
+      { id: "p1-api", title: "FastAPI read API", desc: "GET /lots, /lots/{stock}, /branches, /stats, /healthz, /readyz.", defaultStatus: "done", spec: "api.py", doc: "05-implementation.md" },
+      { id: "p1-cli", title: "CLI entrypoints", desc: "crawl / stats / serve commands via Typer.", defaultStatus: "done", spec: "cli.py", doc: "README.md" },
+      { id: "p1-detail", title: "Optional VDP enrichment", desc: "Detail page fetch for additional fields (--enrich flag, off by default).", defaultStatus: "done", spec: "detail.py", doc: "05-implementation.md" },
+      { id: "p1-proxy", title: "Proxy support (IAAI_PROXY)", desc: "Config-only; no rotation pool yet.", defaultStatus: "partial", spec: "config.py", doc: "05-implementation.md" },
+      { id: "p1-filters", title: "GET /filters endpoint", desc: "Facet/enum values for UI dropdowns.", defaultStatus: "planned", spec: "api.py", doc: "02-architecture-and-plan.md" },
+    ]
+  },
+  {
+    id: "phase1-lifecycle",
+    title: "Phase 1 — Lifecycle & Archival",
+    doc: "05-implementation.md",
+    tasks: [
+      { id: "lc-status", title: "Lifecycle status derivation", desc: "active / sold / if_bid / passed from ItemStatusDesc at parse time.", defaultStatus: "done", spec: "lifecycle.py", doc: "05-implementation.md" },
+      { id: "lc-archive", title: "Archival on completed crawl", desc: "Active lots not seen → removed; concluded lots keep outcome + delisted_at.", defaultStatus: "done", spec: "crawler.py", doc: "05-implementation.md" },
+      { id: "lc-price", title: "Final price for concluded lots", desc: "HighPrebidValue / TimedAuctionHighestBidAmountValue; WinningbidAmount usually empty.", defaultStatus: "done", spec: "parser.py", doc: "reference/lot_field_analysis.md" },
+      { id: "lc-filter", title: "API status filter", desc: "GET /lots?status=active|sold|if_bid|passed|removed (opt-in).", defaultStatus: "done", spec: "api.py", doc: "05-implementation.md" },
+      { id: "lc-fields", title: "Extended price fields on lot row", desc: "timed_high_bid, buy_now_price, prebid fields, bid_closes_at.", defaultStatus: "done", spec: "models.py", doc: "06-realtime-archive-infrastructure.md" },
+    ]
+  },
+  {
+    id: "phase1-quality",
+    title: "Phase 1 — Quality & CI",
+    doc: "05-implementation.md",
+    tasks: [
+      { id: "q-tests", title: "Offline unit tests", desc: "Parser, lifecycle, storage, crawler archival, API status filters, search client.", defaultStatus: "done", spec: "tests/", doc: "05-implementation.md" },
+      { id: "q-ci", title: "GitHub Actions CI", desc: "py_compile + pytest on push/PR.", defaultStatus: "done", spec: ".github/workflows/ci.yml", doc: "05-implementation.md" },
+      { id: "q-e2e", title: "E2E live crawl verification", desc: "Full crawl: 5,218 Canada rows → 1,448 Ontario lots, ~4m24s, 0 duplicates.", defaultStatus: "done", spec: "crawler.py", doc: "05-implementation.md" },
+      { id: "q-safeguards", title: "Anti-detection safeguards", desc: "Loop prevention, duplicate detection, retry/backoff, session re-solve on block.", defaultStatus: "done", spec: "session.py / crawler.py", doc: "05-implementation.md" },
+    ]
+  },
+  {
+    id: "rt-archive",
+    title: "Real-Time Archive — Crawl Optimization",
+    doc: "06-realtime-archive-infrastructure.md",
+    tasks: [
+      { id: "rt-branchids", title: "Ontario-at-source (BranchIds filter)", desc: "Server-side filter → ~1,419 lots in 0 non-Ontario rows. 25× fewer requests.", defaultStatus: "planned", spec: "search_client.py", doc: "06-realtime-archive-infrastructure.md" },
+      { id: "rt-pagesize", title: "PageSize=1000 fast path", desc: "Full Ontario in 2–3 requests (~20–30s) instead of 53 pages.", defaultStatus: "planned", spec: "search_client.py", doc: "06-realtime-archive-infrastructure.md" },
+      { id: "rt-warm", title: "Warm session reuse", desc: "Keep browser session alive between refreshes; re-solve only on block.", defaultStatus: "planned", spec: "session.py", doc: "06-realtime-archive-infrastructure.md" },
+      { id: "rt-winning", title: "Capture winning_bid field", desc: "WinningbidAmount column on lots table.", defaultStatus: "planned", spec: "parser.py / storage.py", doc: "06-realtime-archive-infrastructure.md" },
+    ]
+  },
+  {
+    id: "rt-pricing",
+    title: "Real-Time Archive — Price History",
+    doc: "06-realtime-archive-infrastructure.md",
+    tasks: [
+      { id: "rt-ph-table", title: "price_history table", desc: "Append-on-change time series: stock_number, observed_at, price_type, amount.", defaultStatus: "planned", spec: "storage.py", doc: "06-realtime-archive-infrastructure.md" },
+      { id: "rt-ph-writer", title: "Change-only price writer", desc: "Append to price_history ONLY when a price changed; bump last_price_at.", defaultStatus: "planned", spec: "crawler.py", doc: "06-realtime-archive-infrastructure.md" },
+      { id: "rt-sold-detect", title: "Sold/closed detection", desc: "Lots with past auction_date not seen → status=sold, set final_price + closed_at.", defaultStatus: "planned", spec: "crawler.py", doc: "06-realtime-archive-infrastructure.md" },
+      { id: "rt-run-type", title: "crawl_runs.run_type column", desc: "Distinguish full vs price refresh runs.", defaultStatus: "planned", spec: "storage.py", doc: "06-realtime-archive-infrastructure.md" },
+    ]
+  },
+  {
+    id: "rt-scheduler",
+    title: "Real-Time Archive — Scheduler & Deployment",
+    doc: "06-realtime-archive-infrastructure.md",
+    tasks: [
+      { id: "rt-scheduler", title: "Two-cadence APScheduler", desc: "Full snapshot every 12h + price refresh every 2–15 min.", defaultStatus: "planned", spec: "New module", doc: "06-realtime-archive-infrastructure.md" },
+      { id: "rt-live-window", title: "Live-window tightening", desc: "Poll every 1–3 min during active auction windows.", defaultStatus: "planned", spec: "Scheduler", doc: "06-realtime-archive-infrastructure.md" },
+      { id: "rt-systemd", title: "systemd unit + auto-restart", desc: "Service unit for always-on worker with crash self-heal.", defaultStatus: "planned", spec: "Ops", doc: "06-realtime-archive-infrastructure.md" },
+      { id: "rt-health", title: "Healthchecks.io dead-man's switch", desc: "Alert if a sync cycle is missed.", defaultStatus: "planned", spec: "Ops", doc: "06-realtime-archive-infrastructure.md" },
+      { id: "rt-backup", title: "Nightly DB + JSONL backup", desc: "Backup to Cloudflare R2 / Backblaze B2 and/or Turso mirror.", defaultStatus: "planned", spec: "Ops", doc: "06-realtime-archive-infrastructure.md" },
+      { id: "rt-deploy", title: "Deploy to chosen runtime", desc: "Own box (best) → Oracle Cloud → GitHub Actions (fallback).", defaultStatus: "planned", spec: "Ops", doc: "06-realtime-archive-infrastructure.md" },
+    ]
+  },
+  {
+    id: "rt-api",
+    title: "Real-Time Archive — API Extensions",
+    doc: "06-realtime-archive-infrastructure.md",
+    tasks: [
+      { id: "rt-api-history", title: "GET /lots/{stock}/price-history", desc: "Full price time series for a lot.", defaultStatus: "planned", spec: "api.py", doc: "06-realtime-archive-infrastructure.md" },
+      { id: "rt-api-sold", title: "GET /lots?status=sold&sold_from=…", desc: "Query sold archive by date range.", defaultStatus: "planned", spec: "api.py", doc: "06-realtime-archive-infrastructure.md" },
+      { id: "rt-api-fresh", title: "GET /stats/freshness", desc: "Last full + last price sync time, lots updated, lag.", defaultStatus: "planned", spec: "api.py", doc: "06-realtime-archive-infrastructure.md" },
+    ]
+  },
+  {
+    id: "phase2",
+    title: "Phase 2 — Reliability & Scale",
+    doc: "02-architecture-and-plan.md",
+    tasks: [
+      { id: "p2-proxy-pool", title: "Proxy rotation + session pool", desc: "Residential proxy pool with per-session IP binding and rotation on block.", defaultStatus: "planned", spec: "session.py", doc: "02-architecture-and-plan.md" },
+      { id: "p2-postgres", title: "SQLite → PostgreSQL migration", desc: "JSONB + GIN/btree indexes, optional full-text search.", defaultStatus: "planned", spec: "storage.py", doc: "02-architecture-and-plan.md" },
+      { id: "p2-metrics", title: "Run metrics + alerting", desc: "Block detection, completeness checks vs total-result count, structured logs.", defaultStatus: "planned", spec: "Ops", doc: "02-architecture-and-plan.md" },
+      { id: "p2-resume", title: "Resumability", desc: "Resume interrupted crawls from last successful page.", defaultStatus: "planned", spec: "crawler.py", doc: "02-architecture-and-plan.md" },
+      { id: "p2-managed", title: "Managed scraping API fallback", desc: "Scrapfly/ZenRows adapter behind same interface, config-toggled.", defaultStatus: "planned", spec: "session.py", doc: "02-architecture-and-plan.md" },
+      { id: "p2-httpx", title: "httpx bulk replay (original plan)", desc: "Harvest cookies then replay via fast HTTP client instead of in-page fetch.", defaultStatus: "planned", spec: "session.py", doc: "02-architecture-and-plan.md" },
+    ]
+  },
+  {
+    id: "phase3",
+    title: "Phase 3 — Hardening & Ops",
+    doc: "02-architecture-and-plan.md",
+    tasks: [
+      { id: "p3-docker", title: "Containerize", desc: "Docker image with Playwright deps for reproducible deployment.", defaultStatus: "planned", spec: "Ops", doc: "02-architecture-and-plan.md" },
+      { id: "p3-secrets", title: "Secrets management", desc: "Proxy credentials, DB URLs, API keys via env/secrets store.", defaultStatus: "planned", spec: "Ops", doc: "02-architecture-and-plan.md" },
+      { id: "p3-observability", title: "Observability dashboards", desc: "Structured logs, crawl metrics, block rate monitoring.", defaultStatus: "planned", spec: "Ops", doc: "02-architecture-and-plan.md" },
+      { id: "p3-cost", title: "Cost monitoring", desc: "Track proxy/scraping-API spend against budget.", defaultStatus: "planned", spec: "Ops", doc: "02-architecture-and-plan.md" },
+      { id: "p3-backfill", title: "Backfill tooling", desc: "Re-parse raw JSONL when parser improves without re-scraping.", defaultStatus: "planned", spec: "New module", doc: "02-architecture-and-plan.md" },
+      { id: "p3-buildvsbuy", title: "Build-vs-buy review", desc: "Evaluate licensed data providers (Carapis, Apibara) vs self-hosted.", defaultStatus: "planned", spec: "Research", doc: "01-research.md" },
+    ]
+  },
+];
+
+const STORAGE_KEY = "iaai-dashboard-v1";
+
+/* ── State management ── */
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+  catch { return {}; }
+}
+function saveState(state) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function getTaskStatus(task, state) {
+  if (state[task.id]?.checked) return "done";
+  if (state[task.id]?.status) return state[task.id].status;
+  return task.defaultStatus;
+}
+
+function isDone(status) { return status === "done"; }
+function isRemaining(status) { return status !== "done"; }
+
+/* ── Render overview stats ── */
+function renderOverview() {
+  const state = loadState();
+  let total = 0, done = 0, partial = 0, planned = 0, inProgress = 0;
+  CATEGORIES.forEach(cat => cat.tasks.forEach(t => {
+    total++;
+    const s = getTaskStatus(t, state);
+    if (s === "done") done++;
+    else if (s === "partial") partial++;
+    else if (s === "in_progress") inProgress++;
+    else planned++;
+  }));
+  const pct = total ? Math.round((done / total) * 100) : 0;
+
+  document.getElementById("overview-stats").innerHTML = `
+    <div class="stat-card green"><div class="num">${done}</div><div class="label">Completed</div></div>
+    <div class="stat-card yellow"><div class="num">${partial + inProgress}</div><div class="label">In Progress</div></div>
+    <div class="stat-card blue"><div class="num">${planned}</div><div class="label">Planned</div></div>
+    <div class="stat-card purple"><div class="num">${total}</div><div class="label">Total Tasks</div></div>
+  `;
+  document.getElementById("overall-pct").textContent = pct + "%";
+  const bar = document.getElementById("overall-bar");
+  bar.style.width = pct + "%";
+  bar.classList.toggle("high", pct >= 60);
+}
+
+/* ── Render categories ── */
+function renderCategories(filter = "all") {
+  const state = loadState();
+  const container = document.getElementById("category-container");
+  container.innerHTML = "";
+
+  CATEGORIES.forEach(cat => {
+    const tasks = cat.tasks.filter(t => {
+      const s = getTaskStatus(t, state);
+      if (filter === "all") return true;
+      if (filter === "remaining") return isRemaining(s);
+      return s === filter;
+    });
+    if (tasks.length === 0) return;
+
+    const catDone = cat.tasks.filter(t => isDone(getTaskStatus(t, state))).length;
+    const catTotal = cat.tasks.length;
+    const catPct = Math.round((catDone / catTotal) * 100);
+
+    const block = document.createElement("div");
+    block.className = "category-block";
+    block.innerHTML = `
+      <div class="category-header open" data-cat="${cat.id}">
+        <span class="chevron">▶</span>
+        <span class="category-title">${cat.title}</span>
+        <span class="category-meta">${catDone}/${catTotal}</span>
+        <div class="category-bar"><div class="progress-track"><div class="progress-fill ${catPct >= 60 ? 'high' : ''}" style="width:${catPct}%"></div></div></div>
+      </div>
+      <div class="category-body open" id="body-${cat.id}"></div>
+    `;
+    container.appendChild(block);
+
+    const body = block.querySelector(`#body-${cat.id}`);
+    tasks.forEach(t => {
+      const s = getTaskStatus(t, state);
+      const row = document.createElement("div");
+      row.className = "task-row" + (isDone(s) ? " done" : "");
+      row.innerHTML = `
+        <input type="checkbox" class="task-check" data-id="${t.id}" ${isDone(s) ? "checked" : ""} />
+        <div>
+          <div class="task-title">${t.title}</div>
+          <div class="task-desc">${t.desc}</div>
+          <div class="task-tags">
+            <span class="tag spec">${t.spec}</span>
+            <span class="tag doc" data-doc="${t.doc}">${t.doc}</span>
+          </div>
+        </div>
+        <span class="status-badge ${s}">${s.replace("_", " ")}</span>
+      `;
+      body.appendChild(row);
+    });
+  });
+
+  /* Event: checkboxes */
+  container.querySelectorAll(".task-check").forEach(cb => {
+    cb.addEventListener("change", e => {
+      const id = e.target.dataset.id;
+      const st = loadState();
+      st[id] = { ...st[id], checked: e.target.checked };
+      saveState(st);
+      renderAll();
+    });
+  });
+
+  /* Event: category toggle */
+  container.querySelectorAll(".category-header").forEach(hdr => {
+    hdr.addEventListener("click", () => {
+      hdr.classList.toggle("open");
+      const body = hdr.nextElementSibling;
+      body.classList.toggle("open");
+    });
+  });
+
+  /* Event: doc tag click → switch to PRD section */
+  container.querySelectorAll(".tag.doc").forEach(tag => {
+    tag.addEventListener("click", () => {
+      switchSection("prd");
+    });
+  });
+}
+
+function renderAll() {
+  const filter = document.getElementById("filter-status").value;
+  renderOverview();
+  renderCategories(filter);
+}
+
+/* ── Navigation ── */
+function switchSection(id) {
+  document.querySelectorAll("section").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  document.querySelectorAll(".nav-link").forEach(a => {
+    a.classList.toggle("active", a.dataset.section === id);
+  });
+  history.replaceState(null, "", "#" + id);
+}
+
+document.querySelectorAll(".nav-link").forEach(a => {
+  a.addEventListener("click", e => {
+    e.preventDefault();
+    switchSection(a.dataset.section);
+  });
+});
+
+/* ── Toolbar ── */
+document.getElementById("filter-status").addEventListener("change", renderAll);
+document.getElementById("expand-all").addEventListener("click", () => {
+  document.querySelectorAll(".category-header, .category-body").forEach(el => el.classList.add("open"));
+});
+document.getElementById("collapse-all").addEventListener("click", () => {
+  document.querySelectorAll(".category-header, .category-body").forEach(el => el.classList.remove("open"));
+});
+document.getElementById("reset-progress").addEventListener("click", () => {
+  if (confirm("Reset all checkmarks to defaults? This cannot be undone.")) {
+    localStorage.removeItem(STORAGE_KEY);
+    renderAll();
+  }
+});
+
+/* ── Init ── */
+const hash = location.hash.replace("#", "");
+if (["vision", "prd", "pm"].includes(hash)) switchSection(hash);
+renderAll();
+</script>
+</body>
+</html>

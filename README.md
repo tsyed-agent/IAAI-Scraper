@@ -80,6 +80,10 @@ completeness checks), usage, results, and limitations are documented in
 
 ## Documentation
 
+> **Project dashboard:** open [`docs/dashboard.html`](docs/dashboard.html) in a browser
+> for a visual overview of vision, PRD/specs, and the interactive project board
+> (progress tracking, task checkmarks, expandable categories).
+
 | Doc | What it covers |
 |---|---|
 | [`docs/01-research.md`](docs/01-research.md) | Site profile, Imperva anti-bot findings, Ontario footprint, volume sizing. |
