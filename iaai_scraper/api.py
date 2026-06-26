@@ -1,11 +1,14 @@
 """Internal read API over the scraped Ontario lots (FastAPI).
 
 Endpoints:
-  GET /healthz          - liveness
-  GET /stats            - totals, per-branch counts, last crawl info
-  GET /lots             - filter + paginate lots
-  GET /lots/{stock}     - full lot record
-  GET /branches         - known Ontario branch registry
+  GET /healthz                        - liveness
+  GET /readyz                         - readiness (DB populated)
+  GET /stats                          - totals, per-branch counts, last crawl info
+  GET /stats/freshness                - last crawl + last price change timestamps
+  GET /lots                           - filter + paginate lots
+  GET /lots/{stock}                   - full lot record
+  GET /lots/{stock}/price-history     - price time series for a lot
+  GET /branches                       - known Ontario branch registry
 
 This is a read-only serving layer; the crawler is the only writer.
 """
@@ -19,7 +22,7 @@ from fastapi import FastAPI, HTTPException, Query, Response
 from . import config
 from .storage import SqliteStore
 
-app = FastAPI(title="IAAI Ontario Lots API", version="0.1.0")
+app = FastAPI(title="IAAI Ontario Lots API", version="0.2.0")
 
 
 def _store() -> SqliteStore:
@@ -67,6 +70,15 @@ def stats() -> dict[str, Any]:
         store.close()
 
 
+@app.get("/stats/freshness")
+def stats_freshness() -> dict[str, Any]:
+    store = _store()
+    try:
+        return store.freshness()
+    finally:
+        store.close()
+
+
 @app.get("/branches")
 def branches() -> dict[str, str]:
     return {str(k): v for k, v in config.ONTARIO_BRANCH_IDS.items()}
@@ -84,6 +96,8 @@ def list_lots(
     year_max: Optional[int] = None,
     auction_date_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
     auction_date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    sold_from: Optional[str] = Query(None, description="ISO datetime — sold archive lower bound"),
+    sold_to: Optional[str] = Query(None, description="ISO datetime — sold archive upper bound"),
     runs: Optional[bool] = None,
     keyword: Optional[str] = Query(None, description="match make/model/damage"),
     status: str = Query("all", description="active | sold | if_bid | passed | removed | all"),
@@ -98,6 +112,7 @@ def list_lots(
         "title_brand_type": title_brand_type, "auction_type": auction_type,
         "year_min": year_min, "year_max": year_max,
         "auction_date_from": auction_date_from, "auction_date_to": auction_date_to,
+        "sold_from": sold_from, "sold_to": sold_to,
         "runs": runs, "keyword": keyword,
     }
     store = _store()
@@ -120,5 +135,17 @@ def get_lot(stock_number: str) -> dict[str, Any]:
         if not row:
             raise HTTPException(status_code=404, detail="lot not found")
         return _hydrate(row)
+    finally:
+        store.close()
+
+
+@app.get("/lots/{stock_number}/price-history")
+def get_price_history(stock_number: str) -> dict[str, Any]:
+    store = _store()
+    try:
+        if not store.get_lot(stock_number):
+            raise HTTPException(status_code=404, detail="lot not found")
+        history = store.get_price_history(stock_number)
+        return {"stock_number": stock_number, "count": len(history), "history": history}
     finally:
         store.close()

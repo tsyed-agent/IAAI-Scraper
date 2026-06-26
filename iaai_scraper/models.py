@@ -63,6 +63,7 @@ class Lot(BaseModel):
     buy_now_price: Optional[float] = None
     high_prebid: Optional[float] = None
     timed_high_bid: Optional[float] = None
+    winning_bid: Optional[float] = None
     currency: str = "CAD"
 
     # --- lifecycle / sale outcome (from ItemStatusDesc etc.) ------------ #
@@ -72,6 +73,7 @@ class Lot(BaseModel):
     prebid_item_status_id: Optional[int] = None
     final_price: Optional[float] = None          # best anonymous sale/bid signal
     bid_closes_at: Optional[datetime] = None
+    last_price_at: Optional[datetime] = None     # when any tracked price last changed
     status_updated_at: Optional[datetime] = None
     delisted_at: Optional[datetime] = None
 

@@ -21,10 +21,12 @@ def test_migration_adds_columns(tmp_path):
     cols = {r[1] for r in store.conn.execute("PRAGMA table_info(lots)").fetchall()}
     for required in (
         "status", "item_status_desc", "prebid_item_status_desc",
-        "prebid_item_status_id", "final_price", "timed_high_bid",
-        "bid_closes_at", "status_updated_at", "delisted_at",
+        "prebid_item_status_id", "final_price", "timed_high_bid", "winning_bid",
+        "bid_closes_at", "last_price_at", "status_updated_at", "delisted_at",
     ):
         assert required in cols
+    hist_cols = {r[1] for r in store.conn.execute("PRAGMA table_info(price_history)").fetchall()}
+    assert "price_type" in hist_cols
     row = store.conn.execute("SELECT make FROM lots WHERE stock_number='old1'").fetchone()
     assert row["make"] == "FORD"
     store.close()

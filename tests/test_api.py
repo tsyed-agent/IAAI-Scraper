@@ -51,3 +51,21 @@ def test_readyz_ok_when_db_ready(client):
     body = client.get("/readyz").json()
     assert body["status"] == "ready"
     assert body["lots"] >= 1
+
+
+def test_price_history_endpoint(client):
+    r = client.get("/lots/200/price-history")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["stock_number"] == "200"
+    assert "history" in body
+
+
+def test_price_history_404(client):
+    assert client.get("/lots/missing/price-history").status_code == 404
+
+
+def test_stats_freshness(client):
+    body = client.get("/stats/freshness").json()
+    assert "last_crawl" in body
+    assert "lots_with_price_history" in body

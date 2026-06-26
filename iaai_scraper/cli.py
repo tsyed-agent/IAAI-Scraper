@@ -30,14 +30,25 @@ def _setup_logging(verbose: bool) -> None:
 @app.command()
 def crawl(
     max_pages: int = typer.Option(config.MAX_LIST_PAGES, min=1, help="hard cap on list pages"),
-    page_size: int = typer.Option(config.PAGE_SIZE, min=1, max=100, help="rows per page (<=100)"),
+    page_size: int = typer.Option(
+        config.ONTARIO_PAGE_SIZE if config.ONTARIO_AT_SOURCE else config.PAGE_SIZE,
+        min=1, max=1000, help="rows per page (up to 1000 for Ontario-at-source)",
+    ),
+    canada_wide: bool = typer.Option(
+        False, "--canada-wide", help="legacy: crawl all Canada and filter client-side",
+    ),
     enrich: bool = typer.Option(config.ENRICH_DETAILS, help="fetch detail pages too"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Run a full Ontario crawl and write to the DB + raw JSONL."""
     _setup_logging(verbose)
+    ontario_at_source = not canada_wide
     settings = config.CrawlSettings(
-        page_size=page_size, max_list_pages=max_pages, enrich_details=enrich
+        page_size=page_size,
+        max_list_pages=max_pages,
+        enrich_details=enrich,
+        ontario_at_source=ontario_at_source,
+        branch_ids=config.ONTARIO_BRANCH_IDS_CSV if ontario_at_source else "",
     )
     report = asyncio.run(Crawler(settings).run())
     typer.echo(report.summary())

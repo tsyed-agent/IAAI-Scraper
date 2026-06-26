@@ -80,10 +80,10 @@ _COLUMNS = [
     "branch_id", "branch_name", "location", "province",
     "auction_name", "auction_id", "auction_date", "auction_datetime_display",
     "auction_datetime_utc", "auction_type", "lane", "sequence",
-    "is_timed_auction", "buy_now_price", "high_prebid", "timed_high_bid", "currency",
+    "is_timed_auction", "buy_now_price", "high_prebid", "timed_high_bid", "winning_bid", "currency",
     "source",
     "status", "item_status_desc", "prebid_item_status_desc", "prebid_item_status_id",
-    "final_price", "bid_closes_at", "status_updated_at", "delisted_at",
+    "final_price", "bid_closes_at", "last_price_at", "status_updated_at", "delisted_at",
     "first_seen", "last_seen", "last_changed", "raw",
 ]
 
@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS lots (
     buy_now_price         REAL,
     high_prebid           REAL,
     timed_high_bid        REAL,
+    winning_bid           REAL,
     currency              TEXT DEFAULT 'CAD',
     source                TEXT DEFAULT 'ca.iaai.com',
     status                TEXT DEFAULT 'active',
@@ -135,6 +136,7 @@ CREATE TABLE IF NOT EXISTS lots (
     prebid_item_status_id INTEGER,
     final_price           REAL,
     bid_closes_at         TEXT,
+    last_price_at         TEXT,
     status_updated_at     TEXT,
     delisted_at           TEXT,
     first_seen            TEXT,
@@ -161,6 +163,16 @@ CREATE TABLE IF NOT EXISTS crawl_runs (
     status        TEXT,
     note          TEXT
 );
+
+CREATE TABLE IF NOT EXISTS price_history (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    stock_number  TEXT NOT NULL,
+    observed_at   TEXT NOT NULL,
+    price_type    TEXT NOT NULL,
+    amount        REAL,
+    run_id        INTEGER,
+    UNIQUE(stock_number, observed_at, price_type)
+);
 """
 
 _INDEX_DDL = """
@@ -170,14 +182,24 @@ CREATE INDEX IF NOT EXISTS idx_lots_auction_date    ON lots (auction_date);
 CREATE INDEX IF NOT EXISTS idx_lots_province        ON lots (province);
 CREATE INDEX IF NOT EXISTS idx_lots_vin             ON lots (vin);
 CREATE INDEX IF NOT EXISTS idx_lots_status          ON lots (status);
+CREATE INDEX IF NOT EXISTS idx_price_hist_stock     ON price_history (stock_number, observed_at);
 """
 
 # Housekeeping/derived columns excluded from change comparison.
 _NO_COMPARE = {
     "stock_number", "first_seen", "last_seen", "last_changed", "source", "raw",
-    "status_updated_at", "delisted_at",
+    "status_updated_at", "delisted_at", "last_price_at",
 }
 _COMPARE_COLS = [c for c in _COLUMNS if c not in _NO_COMPARE]
+
+# Tracked price columns -> price_history.price_type
+_PRICE_TRACKED: dict[str, str] = {
+    "high_prebid": "prebid",
+    "timed_high_bid": "timed_bid",
+    "buy_now_price": "buy_now",
+    "winning_bid": "winning",
+    "final_price": "final",
+}
 
 _MIGRATIONS = {
     "lots": {
@@ -218,6 +240,7 @@ _MIGRATIONS = {
         "buy_now_price": "REAL",
         "high_prebid": "REAL",
         "timed_high_bid": "REAL",
+        "winning_bid": "REAL",
         "currency": "TEXT DEFAULT 'CAD'",
         "source": "TEXT DEFAULT 'ca.iaai.com'",
         "status": "TEXT DEFAULT 'active'",
@@ -226,6 +249,7 @@ _MIGRATIONS = {
         "prebid_item_status_id": "INTEGER",
         "final_price": "REAL",
         "bid_closes_at": "TEXT",
+        "last_price_at": "TEXT",
         "status_updated_at": "TEXT",
         "delisted_at": "TEXT",
         "first_seen": "TEXT",
@@ -265,6 +289,7 @@ class SqliteStore:
         self._migrate()
         self.conn.executescript(_INDEX_DDL)
         self.conn.commit()
+        self._current_run_id: Optional[int] = None
 
     def _migrate(self) -> None:
         for table, cols in _MIGRATIONS.items():
@@ -277,6 +302,26 @@ class SqliteStore:
 
     def close(self) -> None:
         self.conn.close()
+
+    def begin_run(self, started_at: Optional[datetime] = None) -> int:
+        """Start a crawl run row and expose its id for price_history linkage."""
+        started_at = started_at or _now()
+        cur = self.conn.execute(
+            "INSERT INTO crawl_runs (started_at, status) VALUES (?, 'running')",
+            (started_at.isoformat(),),
+        )
+        self.conn.commit()
+        self._current_run_id = cur.lastrowid
+        return self._current_run_id
+
+    def finish_run(self, run_id: int, **fields: Any) -> None:
+        """Update the crawl run row with final stats."""
+        assignments = ", ".join(f"{k} = ?" for k in fields)
+        values = [_to_db_value(v) for v in fields.values()]
+        values.append(run_id)
+        self.conn.execute(f"UPDATE crawl_runs SET {assignments} WHERE id = ?", values)
+        self.conn.commit()
+        self._current_run_id = None
 
     # -- writes --------------------------------------------------------- #
     def upsert_lot(self, lot: Lot) -> str:
@@ -295,17 +340,58 @@ class SqliteStore:
             data["last_changed"] = now
             data["status_updated_at"] = now
             data["delisted_at"] = None
+            data["last_price_at"] = self._initial_price_at(data, now)
             self._insert(data)
+            self._record_price_changes(None, data, now)
             return "inserted"
 
         changed = any(_to_db_value(data.get(c)) != existing[c] for c in _COMPARE_COLS)
         status_changed = data.get("status") != existing["status"]
+        price_changed = self._record_price_changes(dict(existing), data, now)
         data["first_seen"] = existing["first_seen"]
         data["last_changed"] = now if changed else existing["last_changed"]
         data["status_updated_at"] = now if status_changed else existing["status_updated_at"]
         data["delisted_at"] = None
+        data["last_price_at"] = (
+            now.isoformat() if price_changed else existing["last_price_at"]
+        )
         self._update(data)
         return "updated" if changed else "unchanged"
+
+    def _initial_price_at(self, data: dict[str, Any], now: datetime) -> Optional[str]:
+        """Set last_price_at on insert when any price field is present."""
+        for col in _PRICE_TRACKED:
+            if data.get(col) is not None:
+                return now.isoformat()
+        return None
+
+    def _record_price_changes(
+        self,
+        existing: Optional[dict[str, Any]],
+        data: dict[str, Any],
+        now: datetime,
+    ) -> bool:
+        """Append price_history rows when tracked price columns change."""
+        changed = False
+        ts = now.isoformat()
+        for col, price_type in _PRICE_TRACKED.items():
+            new_val = data.get(col)
+            old_val = existing.get(col) if existing else None
+            if _to_db_value(new_val) == _to_db_value(old_val):
+                continue
+            if new_val is None and old_val is None:
+                continue
+            changed = True
+            try:
+                self.conn.execute(
+                    "INSERT INTO price_history "
+                    "(stock_number, observed_at, price_type, amount, run_id) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (data["stock_number"], ts, price_type, new_val, self._current_run_id),
+                )
+            except sqlite3.IntegrityError:
+                pass  # duplicate (stock, ts, type) — ignore
+        return changed
 
     def archive_missing(self, seen_stock: set[str], now: Optional[datetime] = None) -> int:
         """Mark lots absent from a completed crawl without erasing sale outcomes."""
@@ -349,10 +435,13 @@ class SqliteStore:
         self.conn.commit()
 
     def record_run(self, **fields: Any) -> None:
+        """Legacy helper: insert a completed run in one shot (tests)."""
         cols = ", ".join(fields.keys())
         ph = ", ".join(["?"] * len(fields))
-        self.conn.execute(f"INSERT INTO crawl_runs ({cols}) VALUES ({ph})",
-                          [_to_db_value(v) for v in fields.values()])
+        self.conn.execute(
+            f"INSERT INTO crawl_runs ({cols}) VALUES ({ph})",
+            [_to_db_value(v) for v in fields.values()],
+        )
         self.conn.commit()
 
     # -- reads (used by the API) ---------------------------------------- #
@@ -406,6 +495,10 @@ class SqliteStore:
             clauses.append("auction_date >= ?"); params.append(filters["auction_date_from"])
         if filters.get("auction_date_to"):
             clauses.append("auction_date <= ?"); params.append(filters["auction_date_to"])
+        if filters.get("sold_from"):
+            clauses.append("status_updated_at >= ?"); params.append(filters["sold_from"])
+        if filters.get("sold_to"):
+            clauses.append("status_updated_at <= ?"); params.append(filters["sold_to"])
         if filters.get("runs") is not None:
             clauses.append("runs = ?"); params.append(1 if filters["runs"] else 0)
         if filters.get("keyword"):
@@ -414,6 +507,31 @@ class SqliteStore:
             params += [kw, kw, kw]
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         return where, params
+
+    def get_price_history(self, stock_number: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT id, stock_number, observed_at, price_type, amount, run_id "
+            "FROM price_history WHERE stock_number = ? ORDER BY observed_at, price_type",
+            (stock_number,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def freshness(self) -> dict[str, Any]:
+        cur = self.conn
+        last_run = cur.execute(
+            "SELECT * FROM crawl_runs WHERE status != 'running' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        last_price = cur.execute(
+            "SELECT MAX(observed_at) AS ts FROM price_history"
+        ).fetchone()["ts"]
+        lots_with_history = cur.execute(
+            "SELECT COUNT(DISTINCT stock_number) AS n FROM price_history"
+        ).fetchone()["n"]
+        return {
+            "last_crawl": dict(last_run) if last_run else None,
+            "last_price_change_at": last_price,
+            "lots_with_price_history": lots_with_history,
+        }
 
     def stats(self) -> dict[str, Any]:
         cur = self.conn

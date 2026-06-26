@@ -29,7 +29,9 @@ curl "http://127.0.0.1:8000/lots?make=toyota&year_min=2018&limit=20"
 curl "http://127.0.0.1:8000/lots?branch_id=70&runs=true&sort=year&descending=true"
 curl "http://127.0.0.1:8000/lots?status=sold&limit=5"   # opt-in status filter
 curl "http://127.0.0.1:8000/lots/12033066"
+curl "http://127.0.0.1:8000/lots/12033066/price-history"
 curl "http://127.0.0.1:8000/stats"
+curl "http://127.0.0.1:8000/stats/freshness"
 curl "http://127.0.0.1:8000/readyz"   # readiness (DB populated)
 curl "http://127.0.0.1:8000/healthz"  # liveness only
 ```
@@ -40,13 +42,13 @@ curl "http://127.0.0.1:8000/healthz"  # liveness only
    Chromium (Playwright) solves the JS challenge; all data requests are then made
    with `fetch()` *inside the page* so the TLS fingerprint, cookies, and Client
    Hints stay consistent with the solved session.
-2. **Crawl completely.** Page through the whole Canada result set sorted by
-   `STOCK ASC` (immutable stock numbers → stable, non-overlapping pages), keep
-   only Ontario-branch lots, dedup by stock number.
-3. **Store two ways.** Append every unique Canada row (pre-Ontario filter) to
-   gzipped JSON Lines (audit/replay) and upsert normalized rows into SQLite
-   (`first_seen`/`last_seen`/`last_changed`, lifecycle status columns).
-4. **Serve.** A read-only FastAPI exposes query/filter/retrieve endpoints.
+2. **Crawl completely.** By default, request **Ontario-only** lots at the source
+   (`BranchIds` + `PageSize=1000`, ~2–3 requests). Legacy `--canada-wide` mode pages
+   all of Canada and filters client-side. Sort is `STOCK ASC` for stable pagination.
+3. **Store two ways.** Append every row to gzipped JSON Lines (audit/replay) and
+   upsert normalized rows into SQLite. **Price changes** append to `price_history`.
+4. **Serve.** A read-only FastAPI exposes query/filter/retrieve endpoints plus
+   `GET /lots/{stock}/price-history` and `GET /stats/freshness`.
 
 ### Lifecycle statuses
 

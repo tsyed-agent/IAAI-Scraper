@@ -19,3 +19,9 @@ def test_build_form_page1_is_new_search():
     assert _build_form(1, 100, "STOCK ASC")["IsNewSearch"] == "true"
     assert _build_form(2, 100, "STOCK ASC")["IsNewSearch"] == "false"
     assert _build_form(3, 100, "STOCK ASC")["RunlistPageIndex"] == "3"
+
+
+def test_build_form_branch_ids():
+    form = _build_form(1, 1000, "STOCK ASC", branch_ids="10,52,56")
+    assert form["BranchIds"] == "10,52,56"
+    assert form["PageSize"] == "1000"

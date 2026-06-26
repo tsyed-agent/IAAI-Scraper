@@ -151,6 +151,7 @@ def parse_row(row: dict[str, Any]) -> Optional[Lot]:
             buy_now_price=_price(row.get("BuyNowPrice")),
             high_prebid=_price(row.get("HighPrebidValue")),
             timed_high_bid=_price(row.get("TimedAuctionHighestBidAmountValue")),
+            winning_bid=_price(row.get("WinningbidAmount")),
             status=status,
             item_status_desc=_str(row.get("ItemStatusDesc")),
             prebid_item_status_desc=_str(row.get("PrebidItemStatusDesc")),

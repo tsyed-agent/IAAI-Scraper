@@ -70,7 +70,13 @@ ONTARIO_BRANCH_NAMES = {name.lower() for name in ONTARIO_BRANCH_IDS.values()}
 # non-overlapping. STOCK ASC sorts by the immutable stock number, so result
 # "windows" do not shift as live auctions churn. Confirmed 0 overlap in Phase 0.
 LIST_SORT = "STOCK ASC"
-PAGE_SIZE = 100                      # max rows per search response observed to work
+PAGE_SIZE = 100                      # legacy Canada-wide default (rows per page)
+ONTARIO_PAGE_SIZE = _env_int("IAAI_ONTARIO_PAGE_SIZE", 1000)  # live-verified max (doc 06)
+# Comma-separated StockBranchIds for server-side Ontario filter (doc 06 §1.1).
+ONTARIO_BRANCH_IDS_CSV = ",".join(str(i) for i in ONTARIO_BRANCH_IDS)
+# When true (default), crawl Ontario lots at the source via BranchIds instead of
+# paging all of Canada and filtering client-side (~25× fewer requests).
+ONTARIO_AT_SOURCE = os.getenv("IAAI_ONTARIO_AT_SOURCE", "true").lower() == "true"
 
 # Politeness: human-like pacing between requests (seconds). A random jitter in
 # [min, max] is slept between each list page / detail fetch to avoid the
@@ -115,12 +121,14 @@ DB_PATH = Path(os.getenv("IAAI_DB_PATH", str(DATA_DIR / "iaai_ontario.db")))
 @dataclass
 class CrawlSettings:
     """Per-run settings, overridable from the CLI."""
-    page_size: int = PAGE_SIZE
+    page_size: int = ONTARIO_PAGE_SIZE if ONTARIO_AT_SOURCE else PAGE_SIZE
     sort: str = LIST_SORT
     max_list_pages: int = MAX_LIST_PAGES
     enrich_details: bool = ENRICH_DETAILS
     delay_min_s: float = DELAY_MIN_S
     delay_max_s: float = DELAY_MAX_S
+    ontario_at_source: bool = ONTARIO_AT_SOURCE
+    branch_ids: str = ONTARIO_BRANCH_IDS_CSV if ONTARIO_AT_SOURCE else ""
     ontario_branch_ids: dict[int, str] = field(default_factory=lambda: dict(ONTARIO_BRANCH_IDS))
 
     def is_ontario(self, stock_branch_id, stock_branch_desc) -> bool:

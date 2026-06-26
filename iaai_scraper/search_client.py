@@ -71,7 +71,12 @@ class SearchClient:
 
     async def fetch_page(self, page: int) -> tuple[list[dict[str, Any]], Optional[int]]:
         """Fetch one results page. Returns (rows, total_count)."""
-        form = _build_form(page=page, page_size=self.settings.page_size, sort=self.settings.sort)
+        form = _build_form(
+            page=page,
+            page_size=self.settings.page_size,
+            sort=self.settings.sort,
+            branch_ids=self.settings.branch_ids,
+        )
         payload = await self.session.post_json(config.SEARCH_RESULT_ENDPOINT, form)
         rows = payload.get("RunList") or []
         total = extract_total(payload)
