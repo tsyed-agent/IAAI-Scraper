@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from . import config
+from .lifecycle import is_concluded
 from .models import Lot
 
 log = logging.getLogger("iaai.storage")
@@ -277,6 +278,49 @@ def _to_db_value(v: Any) -> Any:
     return v
 
 
+def _normalize_price(v: Any) -> Optional[float]:
+    """Normalize a price for stable equality checks (cent precision)."""
+    if v is None:
+        return None
+    try:
+        return round(float(v), 2)
+    except (TypeError, ValueError):
+        return None
+
+
+def _prices_equal(a: Any, b: Any) -> bool:
+    return _normalize_price(a) == _normalize_price(b)
+
+
+def _apply_lifecycle_preservation(
+    existing: dict[str, Any], data: dict[str, Any]
+) -> bool:
+    """Keep concluded sale outcomes when the source row regresses to active.
+
+    Returns True if a concluded status was preserved (no downgrade applied).
+    """
+    old_status = existing.get("status")
+    new_status = data.get("status")
+    if not is_concluded(old_status):
+        return False
+    if is_concluded(new_status):
+        # Still concluded — allow price/status field updates but never clear final_price.
+        if data.get("final_price") is None and existing.get("final_price") is not None:
+            data["final_price"] = existing["final_price"]
+        return False
+    # Source row looks active again; keep the stored sale outcome.
+    log.info(
+        "Preserving concluded status=%s for stock=%s (source row was active)",
+        old_status,
+        data.get("stock_number"),
+    )
+    data["status"] = old_status
+    data["item_status_desc"] = existing.get("item_status_desc")
+    if data.get("final_price") is None:
+        data["final_price"] = existing.get("final_price")
+    return True
+
+
 class SqliteStore:
     def __init__(self, db_path: Path = config.DB_PATH):
         db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -343,20 +387,34 @@ class SqliteStore:
             data["last_price_at"] = self._initial_price_at(data, now)
             self._insert(data)
             self._record_price_changes(None, data, now)
+            self._record_status_change(None, data, now)
             return "inserted"
 
-        changed = any(_to_db_value(data.get(c)) != existing[c] for c in _COMPARE_COLS)
+        _apply_lifecycle_preservation(dict(existing), data)
+        changed = any(
+            _to_db_value(data.get(c)) != existing[c]
+            for c in _COMPARE_COLS
+            if c not in _PRICE_TRACKED
+        ) or any(
+            not _prices_equal(data.get(c), existing[c])
+            for c in _PRICE_TRACKED
+        )
         status_changed = data.get("status") != existing["status"]
         price_changed = self._record_price_changes(dict(existing), data, now)
+        if status_changed:
+            self._record_status_change(dict(existing), data, now)
         data["first_seen"] = existing["first_seen"]
-        data["last_changed"] = now if changed else existing["last_changed"]
+        data["last_changed"] = now if (changed or price_changed or status_changed) else existing["last_changed"]
         data["status_updated_at"] = now if status_changed else existing["status_updated_at"]
+        # Lot reappeared in search — clear delisted marker.
         data["delisted_at"] = None
         data["last_price_at"] = (
             now.isoformat() if price_changed else existing["last_price_at"]
         )
         self._update(data)
-        return "updated" if changed else "unchanged"
+        if changed or price_changed or status_changed:
+            return "updated"
+        return "unchanged"
 
     def _initial_price_at(self, data: dict[str, Any], now: datetime) -> Optional[str]:
         """Set last_price_at on insert when any price field is present."""
@@ -377,9 +435,7 @@ class SqliteStore:
         for col, price_type in _PRICE_TRACKED.items():
             new_val = data.get(col)
             old_val = existing.get(col) if existing else None
-            if _to_db_value(new_val) == _to_db_value(old_val):
-                continue
-            if new_val is None and old_val is None:
+            if _prices_equal(new_val, old_val):
                 continue
             changed = True
             try:
@@ -387,11 +443,54 @@ class SqliteStore:
                     "INSERT INTO price_history "
                     "(stock_number, observed_at, price_type, amount, run_id) "
                     "VALUES (?, ?, ?, ?, ?)",
-                    (data["stock_number"], ts, price_type, new_val, self._current_run_id),
+                    (
+                        data["stock_number"],
+                        ts,
+                        price_type,
+                        _normalize_price(new_val),
+                        self._current_run_id,
+                    ),
                 )
             except sqlite3.IntegrityError:
-                pass  # duplicate (stock, ts, type) — ignore
+                log.debug(
+                    "price_history duplicate skipped stock=%s type=%s at %s",
+                    data["stock_number"],
+                    price_type,
+                    ts,
+                )
         return changed
+
+    def _record_status_change(
+        self,
+        existing: Optional[dict[str, Any]],
+        data: dict[str, Any],
+        now: datetime,
+    ) -> None:
+        """Append a lifecycle transition to price_history (price_type=status_*)."""
+        new_status = data.get("status")
+        old_status = existing.get("status") if existing else None
+        if existing is not None and new_status == old_status:
+            return
+        ts = now.isoformat()
+        try:
+            self.conn.execute(
+                "INSERT INTO price_history "
+                "(stock_number, observed_at, price_type, amount, run_id) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    data["stock_number"],
+                    ts,
+                    f"status_{new_status}",
+                    _normalize_price(data.get("final_price")),
+                    self._current_run_id,
+                ),
+            )
+        except sqlite3.IntegrityError:
+            log.debug(
+                "status history duplicate skipped stock=%s status=%s",
+                data["stock_number"],
+                new_status,
+            )
 
     def archive_missing(self, seen_stock: set[str], now: Optional[datetime] = None) -> int:
         """Mark lots absent from a completed crawl without erasing sale outcomes."""
@@ -409,6 +508,11 @@ class SqliteStore:
                     "UPDATE lots SET status = 'removed', status_updated_at = ?, "
                     "delisted_at = ? WHERE stock_number = ?",
                     (ts, ts, row["stock_number"]),
+                )
+                self._record_status_change(
+                    dict(row),
+                    {"stock_number": row["stock_number"], "status": "removed", "final_price": None},
+                    now,
                 )
                 removed += 1
             else:

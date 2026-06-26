@@ -38,6 +38,80 @@ def test_winning_bid_parsed_and_stored(tmp_path):
     store.close()
 
 
+def test_bid_increments_recorded_separately(tmp_path):
+    """Each bid increase should append a new prebid history row."""
+    db = tmp_path / "t.db"
+    store = SqliteStore(db_path=db)
+    store.begin_run()
+    base = make_row("900", HighPrebidValue="$1,000.00")
+    store.upsert_lot(parse_row(base))
+    for price in ("$2,500.00", "$4,000.00", "$4,000.00"):
+        store.upsert_lot(parse_row({**base, "HighPrebidValue": price}))
+    store.commit()
+    hist = store.get_price_history("900")
+    prebid = [h for h in hist if h["price_type"] == "prebid"]
+    assert len(prebid) == 3  # 1000, 2500, 4000 — duplicate crawl is no-op
+    assert [h["amount"] for h in prebid] == [1000.0, 2500.0, 4000.0]
+    assert store.get_lot("900")["high_prebid"] == 4000.0
+    store.close()
+
+
+def test_identical_re_crawl_is_unchanged_no_extra_history(tmp_path):
+    db = tmp_path / "t.db"
+    store = SqliteStore(db_path=db)
+    row = make_row("901", HighPrebidValue="$500.00")
+    lot = parse_row(row)
+    store.upsert_lot(lot)
+    store.upsert_lot(lot)
+    store.upsert_lot(lot)
+    hist = store.get_price_history("901")
+    assert len([h for h in hist if h["price_type"] == "prebid"]) == 1
+    assert store.upsert_lot(lot) == "unchanged"
+    store.close()
+
+
+def test_concluded_status_not_regressed_on_active_row(tmp_path):
+    """Sold outcome must survive a later crawl where ItemStatusDesc is empty."""
+    db = tmp_path / "t.db"
+    store = SqliteStore(db_path=db)
+    sold = parse_row(make_row("902", ItemStatusDesc="Sold", HighPrebidValue="$3,200.00"))
+    store.upsert_lot(sold)
+    active = parse_row(make_row("902", ItemStatusDesc="", HighPrebidValue="$3,200.00"))
+    out = store.upsert_lot(active)
+    rec = store.get_lot("902")
+    assert rec["status"] == "sold"
+    assert rec["final_price"] == 3200.0
+    assert out == "unchanged"
+    store.close()
+
+
+def test_active_to_sold_records_status_and_final_price(tmp_path):
+    db = tmp_path / "t.db"
+    store = SqliteStore(db_path=db)
+    store.begin_run()
+    store.upsert_lot(parse_row(make_row("903", ItemStatusDesc="", HighPrebidValue="$800.00")))
+    store.upsert_lot(parse_row(make_row("903", ItemStatusDesc="Sold", HighPrebidValue="$800.00")))
+    hist = store.get_price_history("903")
+    types = {h["price_type"] for h in hist}
+    assert "status_sold" in types
+    assert "final" in types
+    store.close()
+
+
+def test_removed_lot_reappearing_becomes_active(tmp_path):
+    from datetime import datetime, timezone
+    db = tmp_path / "t.db"
+    store = SqliteStore(db_path=db)
+    store.upsert_lot(parse_row(make_row("904", ItemStatusDesc="")))
+    store.archive_missing(set(), now=datetime.now(timezone.utc))
+    assert store.get_lot("904")["status"] == "removed"
+    store.upsert_lot(parse_row(make_row("904", ItemStatusDesc="")))
+    rec = store.get_lot("904")
+    assert rec["status"] == "active"
+    assert rec["delisted_at"] is None
+    store.close()
+
+
 def test_freshness_and_sold_archive_filters(tmp_path):
     db = tmp_path / "t.db"
     store = SqliteStore(db_path=db)
