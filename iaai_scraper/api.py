@@ -5,6 +5,7 @@ Endpoints:
   GET /readyz                         - readiness (DB populated)
   GET /stats                          - totals, per-branch counts, last crawl info
   GET /stats/freshness                - last crawl + last price change timestamps
+  GET /filters                        - facet values for filter dropdowns
   GET /lots                           - filter + paginate lots
   GET /lots/{stock}                   - full lot record
   GET /lots/{stock}/price-history     - price time series for a lot
@@ -75,6 +76,15 @@ def stats_freshness() -> dict[str, Any]:
     store = _store()
     try:
         return store.freshness()
+    finally:
+        store.close()
+
+
+@app.get("/filters")
+def list_filters() -> dict[str, Any]:
+    store = _store()
+    try:
+        return store.filters()
     finally:
         store.close()
 

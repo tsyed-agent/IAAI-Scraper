@@ -69,3 +69,14 @@ def test_stats_freshness(client):
     body = client.get("/stats/freshness").json()
     assert "last_crawl" in body
     assert "lots_with_price_history" in body
+
+
+def test_filters_endpoint(client):
+    body = client.get("/filters").json()
+    assert "makes" in body
+    assert "models" in body
+    assert "years" in body
+    assert "statuses" in body
+    assert "branches" in body
+    assert isinstance(body["statuses"], list)
+    assert any(s["status"] == "sold" for s in body["statuses"])

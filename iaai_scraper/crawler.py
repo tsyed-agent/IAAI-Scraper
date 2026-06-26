@@ -105,7 +105,21 @@ class Crawler:
                         raise RuntimeError(
                             f"page {page}: {len(rows)} rows but none parsed (schema drift?)")
                     if new_on_page == 0:
-                        log.info("No new stock numbers on page %d -> stopping (loop guard)", page)
+                        # Loop guard for a repeating last page — but fail loudly if we
+                        # have not yet collected ~98% of the authoritative total.
+                        if (
+                            report.total_canada
+                            and len(seen_stock) < report.total_canada * 0.98
+                        ):
+                            raise RuntimeError(
+                                f"page {page}: 0 new stock numbers but only "
+                                f"{len(seen_stock)}/{report.total_canada} collected "
+                                f"— pagination overlap or server error?"
+                            )
+                        log.info(
+                            "No new stock numbers on page %d -> stopping (loop guard)",
+                            page,
+                        )
                         break
                     if len(rows) < self.settings.page_size:
                         log.info("Short page (%d < %d) -> last page reached",

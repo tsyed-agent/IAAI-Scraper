@@ -32,6 +32,7 @@ curl "http://127.0.0.1:8000/lots/12033066"
 curl "http://127.0.0.1:8000/lots/12033066/price-history"
 curl "http://127.0.0.1:8000/stats"
 curl "http://127.0.0.1:8000/stats/freshness"
+curl "http://127.0.0.1:8000/filters"
 curl "http://127.0.0.1:8000/readyz"   # readiness (DB populated)
 curl "http://127.0.0.1:8000/healthz"  # liveness only
 ```

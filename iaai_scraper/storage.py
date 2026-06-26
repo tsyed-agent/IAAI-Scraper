@@ -652,3 +652,47 @@ class SqliteStore:
             "by_branch": by_branch,
             "last_run": dict(last_run) if last_run else None,
         }
+
+    def filters(self) -> dict[str, Any]:
+        """Distinct facet values present in the DB for API filter dropdowns."""
+        cur = self.conn
+
+        def _distinct_text(col: str) -> list[str]:
+            rows = cur.execute(
+                f"SELECT DISTINCT {col} FROM lots "
+                f"WHERE {col} IS NOT NULL AND TRIM({col}) != '' "
+                f"ORDER BY LOWER({col})"
+            ).fetchall()
+            return [str(r[0]) for r in rows]
+
+        years = [
+            int(r[0])
+            for r in cur.execute(
+                "SELECT DISTINCT year FROM lots WHERE year IS NOT NULL ORDER BY year"
+            ).fetchall()
+        ]
+        statuses = [
+            dict(r)
+            for r in cur.execute(
+                "SELECT status, COUNT(*) AS count FROM lots "
+                "GROUP BY status ORDER BY count DESC"
+            ).fetchall()
+        ]
+        branches = [
+            dict(r)
+            for r in cur.execute(
+                "SELECT branch_id, branch_name, COUNT(*) AS count FROM lots "
+                "WHERE branch_id IS NOT NULL "
+                "GROUP BY branch_id ORDER BY count DESC"
+            ).fetchall()
+        ]
+        return {
+            "makes": _distinct_text("make"),
+            "models": _distinct_text("model"),
+            "years": years,
+            "provinces": _distinct_text("province"),
+            "title_brand_types": _distinct_text("title_brand_type"),
+            "auction_types": _distinct_text("auction_type"),
+            "statuses": statuses,
+            "branches": branches,
+        }
