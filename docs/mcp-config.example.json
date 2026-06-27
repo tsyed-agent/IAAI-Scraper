@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "iaai-ontario": {
+      "command": "python",
+      "args": ["-m", "iaai_mcp"],
+      "env": {
+        "IAAI_API_TOKEN": "REPLACE_WITH_YOUR_TOKEN",
+        "IAAI_API_BASE_URL": "http://127.0.0.1:8000",
+        "IAAI_DOCKER_WAKE": "true",
+        "IAAI_REPO_ROOT": "/path/to/IAAI-Scraper"
+      }
+    }
+  }
+}

@@ -23,6 +23,7 @@ docker compose up --build -d
 - **Auth:** container refuses to start without `IAAI_API_TOKEN`. All routes except `GET /healthz` require a token.
 - **Network:** outbound HTTPS to `ca.iaai.com` happens only when you call `POST /commands/crawl` (Playwright crawl). Reads are local SQLite only.
 - **Data:** persisted in Docker volume `iaai-data` at `/data`.
+- **MCP:** optional `iaai-mcp` service on `127.0.0.1:8080` for LLM integration — see [docs/08-mcp-server.md](docs/08-mcp-server.md).
 
 ```bash
 export TOKEN="your-token-from-.env"
@@ -155,15 +156,18 @@ completeness checks), usage, results, and limitations are documented in
 | [`docs/05-implementation.md`](docs/05-implementation.md) | **How the built scraper works, anti-detection, safeguards, usage, results.** |
 | [`docs/06-realtime-archive-infrastructure.md`](docs/06-realtime-archive-infrastructure.md) | **Real-time price + historical archive: free-infra research & recommendation.** |
 | [`docs/07-live-verification.md`](docs/07-live-verification.md) | **Live E2E verification of Ontario-at-source crawl (2026-06-26).** |
+| [`docs/08-mcp-server.md`](docs/08-mcp-server.md) | **MCP server for LLM integration (tools, Docker wake, concurrency).** |
 
 ## Project layout
 
 ```
-iaai_scraper/      # the package (config, session, crawler, storage, api, cli, ...)
-spike/             # Phase 0 exploration scripts used to discover the data path
-tests/             # offline unit tests (parser + storage)
+iaai_scraper/      # scraper + FastAPI package
+iaai_mcp/          # MCP server for LLM integration (wraps the API)
+spike/             # Phase 0 exploration scripts
+tests/             # unit tests (parser, storage, API, MCP)
 docs/              # research, design, and implementation docs
 requirements.txt
+requirements-mcp.txt
 ```
 
 ## Limitations

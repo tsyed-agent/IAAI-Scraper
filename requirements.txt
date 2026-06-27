@@ -3,7 +3,7 @@ playwright==1.49.1          # headless Chromium to pass the Imperva/Incapsula ch
 # Data modelling / validation
 pydantic==2.10.4
 # Internal API
-fastapi==0.115.6
+fastapi>=0.133.0,<1.0.0   # starlette 1.x (required by mcp SDK)
 uvicorn[standard]==0.34.0
 # CLI / utils
 typer==0.15.1

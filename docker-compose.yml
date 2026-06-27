@@ -1,4 +1,4 @@
-# IAAI Ontario API — binds to localhost only by default.
+# IAAI Ontario API + MCP — binds to localhost only by default.
 # Copy .env.example to .env and set IAAI_API_TOKEN before starting.
 services:
   iaai-api:
@@ -22,7 +22,31 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=256m,mode=1777
-    # No extra ports, no host network — only published 8000/tcp on loopback.
+
+  iaai-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    image: iaai-mcp:latest
+    container_name: iaai-mcp
+    restart: unless-stopped
+    depends_on:
+      - iaai-api
+    ports:
+      - "127.0.0.1:${IAAI_MCP_PORT:-8080}:8080"
+    environment:
+      IAAI_API_TOKEN: ${IAAI_API_TOKEN:?set IAAI_API_TOKEN in .env}
+      IAAI_API_BASE_URL: http://iaai-api:8000
+      IAAI_MCP_TRANSPORT: streamable-http
+      IAAI_MCP_HOST: 0.0.0.0
+      IAAI_MCP_PORT: 8080
+      IAAI_DOCKER_WAKE: "false"
+      IAAI_MCP_MAX_CONCURRENT: "32"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
 
 volumes:
   iaai-data:

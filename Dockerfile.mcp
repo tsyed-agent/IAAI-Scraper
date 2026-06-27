@@ -1,0 +1,32 @@
+# MCP sidecar — HTTP client only; talks to iaai-api over the compose network.
+FROM python:3.12-slim-bookworm
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    IAAI_MCP_TRANSPORT=streamable-http \
+    IAAI_MCP_HOST=0.0.0.0 \
+    IAAI_MCP_PORT=8080 \
+    IAAI_API_BASE_URL=http://iaai-api:8000 \
+    IAAI_DOCKER_WAKE=false
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-mcp-lite.txt .
+RUN pip install --no-cache-dir -r requirements-mcp-lite.txt
+
+COPY iaai_mcp/ iaai_mcp/
+
+RUN groupadd --system iaai-mcp \
+    && useradd --system --gid iaai-mcp --home-dir /app --shell /usr/sbin/nologin iaai-mcp \
+    && chown -R iaai-mcp:iaai-mcp /app
+
+USER iaai-mcp
+
+EXPOSE 8080
+
+ENTRYPOINT ["python", "-m", "iaai_mcp"]
