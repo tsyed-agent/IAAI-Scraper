@@ -608,6 +608,7 @@ class SqliteStore:
         allowed_sort = {
             "auction_date", "year", "make", "model", "odometer",
             "damage_estimate", "last_seen", "stock_number",
+            "high_prebid", "timed_high_bid", "final_price", "buy_now_price",
         }
         sort_col = sort if sort in allowed_sort else "auction_date"
         direction = "DESC" if descending else "ASC"
@@ -622,6 +623,16 @@ class SqliteStore:
         return [dict(r) for r in rows], total
 
     @staticmethod
+    def _csv_lower_in(values: str, column: str, clauses: list[str], params: list[Any]) -> None:
+        """Match any of comma-separated values (case-insensitive)."""
+        parts = [p.strip() for p in values.split(",") if p.strip()]
+        if not parts:
+            return
+        placeholders = ", ".join(["?"] * len(parts))
+        clauses.append(f"LOWER({column}) IN ({placeholders})")
+        params.extend(p.lower() for p in parts)
+
+    @staticmethod
     def _build_where(filters: dict[str, Any]) -> tuple[str, list[Any]]:
         clauses: list[str] = []
         params: list[Any] = []
@@ -629,14 +640,34 @@ class SqliteStore:
         if status and str(status).lower() != "all":
             clauses.append("LOWER(status) = LOWER(?)")
             params.append(str(status))
-        eq = {"make": "make", "model": "model", "branch_id": "branch_id",
-              "province": "province", "title_brand_type": "title_brand_type",
-              "auction_type": "auction_type"}
+
+        # Single-value equality filters.
+        eq = {
+            "province": "province",
+            "title_brand_type": "title_brand_type",
+            "auction_type": "auction_type",
+            "primary_damage": "primary_damage",
+            "secondary_damage": "secondary_damage",
+            "stock_number": "stock_number",
+        }
         for key, col in eq.items():
             if filters.get(key) is not None:
-                # Case-insensitive match for text-ish fields.
                 clauses.append(f"LOWER({col}) = LOWER(?)")
                 params.append(str(filters[key]))
+
+        # Comma-separated multi-value filters (make=toyota,honda).
+        if filters.get("make"):
+            SqliteStore._csv_lower_in(str(filters["make"]), "make", clauses, params)
+        if filters.get("model"):
+            SqliteStore._csv_lower_in(str(filters["model"]), "model", clauses, params)
+
+        if filters.get("branch_id") is not None:
+            parts = [p.strip() for p in str(filters["branch_id"]).split(",") if p.strip()]
+            if parts:
+                placeholders = ", ".join(["?"] * len(parts))
+                clauses.append(f"branch_id IN ({placeholders})")
+                params.extend(int(p) for p in parts)
+
         if filters.get("year_min") is not None:
             clauses.append("year >= ?"); params.append(filters["year_min"])
         if filters.get("year_max") is not None:
@@ -649,12 +680,43 @@ class SqliteStore:
             clauses.append("status_updated_at >= ?"); params.append(filters["sold_from"])
         if filters.get("sold_to"):
             clauses.append("status_updated_at <= ?"); params.append(filters["sold_to"])
-        if filters.get("runs") is not None:
-            clauses.append("runs = ?"); params.append(1 if filters["runs"] else 0)
+
+        for col, lo_key, hi_key in (
+            ("high_prebid", "high_prebid_min", "high_prebid_max"),
+            ("timed_high_bid", "timed_high_bid_min", "timed_high_bid_max"),
+            ("final_price", "final_price_min", "final_price_max"),
+            ("buy_now_price", "buy_now_price_min", "buy_now_price_max"),
+            ("damage_estimate", "damage_estimate_min", "damage_estimate_max"),
+            ("odometer", "odometer_min", "odometer_max"),
+        ):
+            if filters.get(lo_key) is not None:
+                clauses.append(f"{col} >= ?"); params.append(filters[lo_key])
+            if filters.get(hi_key) is not None:
+                clauses.append(f"{col} <= ?"); params.append(filters[hi_key])
+
+        for key, col in (
+            ("runs", "runs"),
+            ("starts", "starts"),
+            ("has_keys", "has_keys"),
+            ("is_timed_auction", "is_timed_auction"),
+            ("is_auction_closed", "is_auction_closed"),
+        ):
+            if filters.get(key) is not None:
+                clauses.append(f"{col} = ?")
+                params.append(1 if filters[key] else 0)
+
+        if filters.get("vin"):
+            clauses.append("UPPER(vin) LIKE UPPER(?)")
+            params.append(f"%{filters['vin']}%")
+
         if filters.get("keyword"):
             kw = f"%{filters['keyword']}%"
-            clauses.append("(make LIKE ? OR model LIKE ? OR primary_damage LIKE ?)")
-            params += [kw, kw, kw]
+            clauses.append(
+                "(make LIKE ? OR model LIKE ? OR primary_damage LIKE ? "
+                "OR secondary_damage LIKE ? OR stock_number LIKE ?)"
+            )
+            params += [kw, kw, kw, kw, kw]
+
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         return where, params
 
@@ -739,6 +801,8 @@ class SqliteStore:
             "provinces": _distinct_text("province"),
             "title_brand_types": _distinct_text("title_brand_type"),
             "auction_types": _distinct_text("auction_type"),
+            "primary_damages": _distinct_text("primary_damage"),
+            "secondary_damages": _distinct_text("secondary_damage"),
             "statuses": statuses,
             "branches": branches,
         }

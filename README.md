@@ -16,17 +16,43 @@ python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 python -m playwright install --with-deps chromium
 
-python -m iaai_scraper.cli crawl            # full Ontario crawl -> data/iaai_ontario.db
-python -m iaai_scraper.cli crawl --max-pages 3 -v   # quick test crawl
+python -m iaai_scraper.cli serve            # start the unified API on :8000
+```
+
+**Everything runs through the API** — queries read the local DB; commands sync from IAAI:
+
+```bash
+# Discover commands
+curl http://127.0.0.1:8000/commands
+
+# Sync Ontario lots (background job, ~20–30s)
+curl -X POST http://127.0.0.1:8000/commands/crawl
+curl http://127.0.0.1:8000/commands/crawl/status
+
+# Query with filters (local DB only, instant)
+curl "http://127.0.0.1:8000/lots?make=toyota,honda&year_min=2018&high_prebid_min=1000"
+curl http://127.0.0.1:8000/filters
+```
+
+Optional: set `IAAI_API_TOKEN` and pass `Authorization: Bearer <token>` on `POST /commands/*`.
+
+CLI shortcuts (same logic, for ops without HTTP):
+
+```bash
+python -m iaai_scraper.cli crawl            # sync via CLI (blocking)
 python -m iaai_scraper.cli stats            # DB statistics
-python -m iaai_scraper.cli serve            # internal API on :8000
+python scripts/verify_ontario_crawl.py     # verify last crawl invariants
 ```
 
 Example API calls:
 
 ```bash
+curl -X POST http://127.0.0.1:8000/commands/crawl
+curl http://127.0.0.1:8000/commands/crawl/status
 curl "http://127.0.0.1:8000/lots?make=toyota&year_min=2018&limit=20"
-curl "http://127.0.0.1:8000/lots?branch_id=70&runs=true&sort=year&descending=true"
+curl "http://127.0.0.1:8000/lots?make=toyota,honda&status=active&high_prebid_min=500"
+curl "http://127.0.0.1:8000/lots?primary_damage=front&has_keys=true&runs=true"
+curl "http://127.0.0.1:8000/lots?branch_id=70,56&sort=final_price&descending=true"
 curl "http://127.0.0.1:8000/lots?status=sold&limit=5"   # opt-in status filter
 curl "http://127.0.0.1:8000/lots/12033066"
 curl "http://127.0.0.1:8000/lots/12033066/price-history"
