@@ -9,7 +9,30 @@ reliability, and cost. Images are intentionally **not** collected.
 > Status: **working end-to-end.** A full crawl retrieves all Ontario lots
 > (~1,448 across 7 branches) into SQLite, served by a FastAPI read API.
 
-## Quick start
+## Docker (recommended for deployment)
+
+Isolated container: one HTTP port, auth required, data on a named volume.
+
+```bash
+cp .env.example .env
+# Edit .env — set IAAI_API_TOKEN (openssl rand -hex 32)
+docker compose up --build -d
+```
+
+- **Port:** binds `127.0.0.1:8000` only (not `0.0.0.0` on the host). Put nginx/Caddy/Cloudflare Tunnel in front for remote access.
+- **Auth:** container refuses to start without `IAAI_API_TOKEN`. All routes except `GET /healthz` require a token.
+- **Network:** outbound HTTPS to `ca.iaai.com` happens only when you call `POST /commands/crawl` (Playwright crawl). Reads are local SQLite only.
+- **Data:** persisted in Docker volume `iaai-data` at `/data`.
+
+```bash
+export TOKEN="your-token-from-.env"
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/stats
+curl -X POST -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/commands/crawl
+```
+
+Alternative header: `X-API-Key: $TOKEN`
+
+## Quick start (local dev)
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
@@ -34,7 +57,21 @@ curl "http://127.0.0.1:8000/lots?make=toyota,honda&year_min=2018&high_prebid_min
 curl http://127.0.0.1:8000/filters
 ```
 
-Optional: set `IAAI_API_TOKEN` and pass `Authorization: Bearer <token>` on `POST /commands/*`.
+### API authentication
+
+| Env | Effect |
+|-----|--------|
+| `IAAI_REQUIRE_AUTH=false` | Open access (local dev default when no token set) |
+| `IAAI_API_TOKEN=<secret>` | Enables auth (`auto` mode — enforced because token is set) |
+| `IAAI_REQUIRE_AUTH=true` | **Mandatory** token on all routes except `GET /healthz`; startup fails if token missing |
+
+Pass the token on every request:
+
+```bash
+curl -H "Authorization: Bearer $IAAI_API_TOKEN" http://127.0.0.1:8000/lots?limit=5
+# or
+curl -H "X-API-Key: $IAAI_API_TOKEN" http://127.0.0.1:8000/lots?limit=5
+```
 
 CLI shortcuts (same logic, for ops without HTTP):
 

@@ -9,29 +9,37 @@ Commands (same process, shared crawler logic):
   POST /commands/crawl        — start Ontario sync (background)
   GET  /commands/crawl/status — poll crawl job status
 
-Optional: set ``IAAI_API_TOKEN`` to require ``Authorization: Bearer <token>`` on POST /commands/*.
+Authentication (when ``IAAI_REQUIRE_AUTH`` is enabled or ``IAAI_API_TOKEN`` is set):
+  All routes except ``GET /healthz`` require ``Authorization: Bearer <token>``
+  or ``X-API-Key: <token>``. Set ``IAAI_API_TOKEN`` in production / Docker.
 """
 from __future__ import annotations
 
 import json
-import os
+from contextlib import asynccontextmanager
 from typing import Any, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from . import config
+from .auth import require_api_auth, validate_startup_auth
 from .storage import SqliteStore
 from .sync_manager import sync_manager
 
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    validate_startup_auth()
+    yield
+
+
 app = FastAPI(
     title="IAAI Ontario API",
-    version="0.3.0",
+    version="0.4.0",
     description="Query scraped Ontario lots and run crawl commands through one API.",
+    lifespan=_lifespan,
 )
-
-_API_TOKEN = os.getenv("IAAI_API_TOKEN", "") or None
-
 
 def _store() -> SqliteStore:
     return SqliteStore(db_path=config.DB_PATH)
@@ -53,15 +61,6 @@ def _hydrate(row: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
-def _require_command_auth(authorization: Optional[str] = Header(None)) -> None:
-    if not _API_TOKEN:
-        return
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="missing bearer token")
-    if authorization.removeprefix("Bearer ").strip() != _API_TOKEN:
-        raise HTTPException(status_code=403, detail="invalid token")
-
-
 class CrawlCommand(BaseModel):
     max_list_pages: int = Field(default=config.MAX_LIST_PAGES, ge=1)
     page_size: int = Field(
@@ -81,10 +80,11 @@ def _lot_filters(**kwargs: Any) -> dict[str, Any]:
 # ------------------------------------------------------------------ #
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
+    """Liveness probe — no auth (Docker HEALTHCHECK only)."""
     return {"status": "ok"}
 
 
-@app.get("/readyz")
+@app.get("/readyz", dependencies=[Depends(require_api_auth)])
 def readyz(response: Response) -> dict[str, Any]:
     store = _store()
     try:
@@ -97,7 +97,7 @@ def readyz(response: Response) -> dict[str, Any]:
         store.close()
 
 
-@app.get("/stats")
+@app.get("/stats", dependencies=[Depends(require_api_auth)])
 def stats() -> dict[str, Any]:
     store = _store()
     try:
@@ -106,7 +106,7 @@ def stats() -> dict[str, Any]:
         store.close()
 
 
-@app.get("/stats/freshness")
+@app.get("/stats/freshness", dependencies=[Depends(require_api_auth)])
 def stats_freshness() -> dict[str, Any]:
     store = _store()
     try:
@@ -115,7 +115,7 @@ def stats_freshness() -> dict[str, Any]:
         store.close()
 
 
-@app.get("/filters")
+@app.get("/filters", dependencies=[Depends(require_api_auth)])
 def list_filters() -> dict[str, Any]:
     store = _store()
     try:
@@ -124,7 +124,7 @@ def list_filters() -> dict[str, Any]:
         store.close()
 
 
-@app.get("/branches")
+@app.get("/branches", dependencies=[Depends(require_api_auth)])
 def branches() -> dict[str, str]:
     return {str(k): v for k, v in config.ONTARIO_BRANCH_IDS.items()}
 
@@ -132,7 +132,7 @@ def branches() -> dict[str, str]:
 # ------------------------------------------------------------------ #
 # Commands
 # ------------------------------------------------------------------ #
-@app.get("/commands")
+@app.get("/commands", dependencies=[Depends(require_api_auth)])
 def list_commands() -> dict[str, Any]:
     return {
         "commands": [
@@ -147,7 +147,7 @@ def list_commands() -> dict[str, Any]:
     }
 
 
-@app.post("/commands/crawl", status_code=202, dependencies=[Depends(_require_command_auth)])
+@app.post("/commands/crawl", status_code=202, dependencies=[Depends(require_api_auth)])
 async def command_crawl(body: CrawlCommand = CrawlCommand()) -> dict[str, Any]:
     """Start a crawl. Returns immediately; poll ``GET /commands/crawl/status``."""
     if sync_manager.is_running:
@@ -172,7 +172,7 @@ async def command_crawl(body: CrawlCommand = CrawlCommand()) -> dict[str, Any]:
     }
 
 
-@app.get("/commands/crawl/status")
+@app.get("/commands/crawl/status", dependencies=[Depends(require_api_auth)])
 def command_crawl_status() -> dict[str, Any]:
     return sync_manager.status()
 
@@ -180,7 +180,7 @@ def command_crawl_status() -> dict[str, Any]:
 # ------------------------------------------------------------------ #
 # Lots (read from local DB)
 # ------------------------------------------------------------------ #
-@app.get("/lots")
+@app.get("/lots", dependencies=[Depends(require_api_auth)])
 def list_lots(
     make: Optional[str] = Query(None, description="make or comma-separated makes"),
     model: Optional[str] = Query(None, description="model or comma-separated models"),
@@ -254,7 +254,7 @@ def list_lots(
         store.close()
 
 
-@app.get("/lots/{stock_number}")
+@app.get("/lots/{stock_number}", dependencies=[Depends(require_api_auth)])
 def get_lot(stock_number: str) -> dict[str, Any]:
     store = _store()
     try:
@@ -266,7 +266,7 @@ def get_lot(stock_number: str) -> dict[str, Any]:
         store.close()
 
 
-@app.get("/lots/{stock_number}/price-history")
+@app.get("/lots/{stock_number}/price-history", dependencies=[Depends(require_api_auth)])
 def get_price_history(stock_number: str) -> dict[str, Any]:
     store = _store()
     try:

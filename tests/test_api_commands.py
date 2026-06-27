@@ -14,11 +14,15 @@ from iaai_scraper.sync_manager import SyncManager
 @pytest.fixture
 def api_client(monkeypatch, tmp_path):
     db = tmp_path / "cmd.db"
+    monkeypatch.setenv("IAAI_REQUIRE_AUTH", "false")
+    monkeypatch.delenv("IAAI_API_TOKEN", raising=False)
     monkeypatch.setattr(config, "DB_PATH", db, raising=False)
     monkeypatch.setattr(config, "DATA_DIR", tmp_path, raising=False)
     fresh = SyncManager()
     monkeypatch.setattr("iaai_scraper.sync_manager.sync_manager", fresh)
+    import iaai_scraper.auth as auth_mod
     import iaai_scraper.api as api
+    importlib.reload(auth_mod)
     importlib.reload(api)
     return TestClient(api.app)
 

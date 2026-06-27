@@ -12,13 +12,17 @@ from tests.conftest import make_row
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     db = tmp_path / "api.db"
+    monkeypatch.setenv("IAAI_REQUIRE_AUTH", "false")
+    monkeypatch.delenv("IAAI_API_TOKEN", raising=False)
     monkeypatch.setattr(config, "DB_PATH", db, raising=False)
     store = SqliteStore(db_path=db)
     store.upsert_lot(parse_row(make_row("100", ItemStatusDesc="")))
     store.upsert_lot(parse_row(make_row("200", ItemStatusDesc="Sold", HighPrebidValue=1)))
     store.commit()
     store.close()
+    import iaai_scraper.auth as auth_mod
     import iaai_scraper.api as api
+    importlib.reload(auth_mod)
     importlib.reload(api)
     return TestClient(api.app)
 
