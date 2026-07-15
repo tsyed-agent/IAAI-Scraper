@@ -1,19 +1,13 @@
 """Orchestrates a full Ontario crawl with completeness + safety guarantees.
 
-Approach (validated in Phase 0):
-  * Page through the *entire* Canada result set sorted by ``STOCK ASC``. That sort
-    is on the immutable stock number, so pages never overlap or shift as live
-    auctions churn — this is what makes the crawl complete.
-  * Classify each lot as Ontario by StockBranchId (validated by branch name) and
-    keep only those.
-  * Dedup by stock number across the whole run.
+Approach (default, ``ontario_at_source=True``):
+  * Request only Ontario branches via ``BranchIds`` + large ``PageSize`` (doc 06).
+  * Page through the Ontario result set sorted by ``STOCK ASC``.
 
-Safeguards:
-  * Hard page cap (MAX_LIST_PAGES) so a pagination bug can never loop forever.
-  * "No new rows" detection: if a page contributes zero unseen stock numbers we
-    stop (defends against a server that repeats the last page at the end).
-  * Completeness check against the authoritative TOTAL_COUNT, logged + recorded.
-  * Per-row parsing is defensive; one bad row is skipped, not fatal.
+Legacy mode (``ontario_at_source=False``):
+  * Page through the entire Canada result set, filter to Ontario by StockBranchId.
+
+Both modes dedup by stock number and share the same safeguards.
 """
 from __future__ import annotations
 
@@ -76,6 +70,10 @@ class Crawler:
         store = SqliteStore()
         raw = RawWriter()
         seen_stock: set[str] = set()           # dedup + loop guard across the whole run
+        run_id = store.begin_run(report.started_at)
+
+        scope = "Ontario (BranchIds)" if self.settings.ontario_at_source else "Canada-wide"
+        log.info("Crawl scope: %s, page_size=%d", scope, self.settings.page_size)
 
         try:
             async with IaaiSession(self.settings) as session:
@@ -85,7 +83,7 @@ class Crawler:
                     rows, total = await client.fetch_page(page)
                     if report.total_canada is None and total is not None:
                         report.total_canada = total
-                        log.info("Authoritative Canada total: %d", total)
+                        log.info("Authoritative %s total: %d", scope, total)
 
                     if not rows:
                         log.info("Page %d returned 0 rows -> end of results", page)
@@ -98,7 +96,7 @@ class Crawler:
                     report.canada_rows_seen = len(seen_stock)
                     store.commit()
                     raw.flush()
-                    log.info("Page %d: %d rows, %d new, %d parsed (ontario=%d, canada=%d/%s)",
+                    log.info("Page %d: %d rows, %d new, %d parsed (ontario=%d, seen=%d/%s)",
                              page, len(rows), new_on_page, parsed_on_page, report.ontario_seen,
                              len(seen_stock), report.total_canada)
 
@@ -107,14 +105,28 @@ class Crawler:
                         raise RuntimeError(
                             f"page {page}: {len(rows)} rows but none parsed (schema drift?)")
                     if new_on_page == 0:
-                        log.info("No new stock numbers on page %d -> stopping (loop guard)", page)
+                        # Loop guard for a repeating last page — but fail loudly if we
+                        # have not yet collected ~98% of the authoritative total.
+                        if (
+                            report.total_canada
+                            and len(seen_stock) < report.total_canada * 0.98
+                        ):
+                            raise RuntimeError(
+                                f"page {page}: 0 new stock numbers but only "
+                                f"{len(seen_stock)}/{report.total_canada} collected "
+                                f"— pagination overlap or server error?"
+                            )
+                        log.info(
+                            "No new stock numbers on page %d -> stopping (loop guard)",
+                            page,
+                        )
                         break
                     if len(rows) < self.settings.page_size:
                         log.info("Short page (%d < %d) -> last page reached",
                                  len(rows), self.settings.page_size)
                         break
                     if report.total_canada and len(seen_stock) >= report.total_canada:
-                        log.info("Collected all %d Canada lots -> complete", report.total_canada)
+                        log.info("Collected all %d lots -> complete", report.total_canada)
                         break
 
                     await session.polite_delay()
@@ -134,7 +146,8 @@ class Crawler:
         finally:
             report.finished_at = datetime.now(timezone.utc)
             raw.close()
-            store.record_run(
+            store.finish_run(
+                run_id,
                 started_at=report.started_at, finished_at=report.finished_at,
                 total_canada=report.total_canada, ontario_seen=report.ontario_seen,
                 inserted=report.inserted, updated=report.updated,
@@ -167,10 +180,13 @@ class Crawler:
             seen_stock.add(lot.stock_number)
             new_count += 1
 
-            # Raw audit/replay: persist every unique Canada row (pre-Ontario-filter).
+            # Raw audit/replay: persist every unique row seen this run.
             raw.write(row)
 
             if not self.settings.is_ontario(lot.branch_id, lot.branch_name):
+                if self.settings.ontario_at_source:
+                    log.warning("Non-Ontario row with BranchIds filter: stock=%s branch=%s",
+                                lot.stock_number, lot.branch_name)
                 continue
 
             report.ontario_seen += 1
@@ -197,7 +213,7 @@ class Crawler:
         """Flag completeness: did we page through (approximately) the whole set?"""
         if report.total_canada is None:
             return "completed_unknown_total"
-        # Allow small slack for live inventory churn during the crawl.
+        # ``total_canada`` holds the authoritative API total for the crawl scope.
         if report.canada_rows_seen >= report.total_canada * 0.98:
             return "completed"
         return "completed_partial"

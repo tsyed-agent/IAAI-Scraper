@@ -12,13 +12,17 @@ from tests.conftest import make_row
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     db = tmp_path / "api.db"
+    monkeypatch.setenv("IAAI_REQUIRE_AUTH", "false")
+    monkeypatch.delenv("IAAI_API_TOKEN", raising=False)
     monkeypatch.setattr(config, "DB_PATH", db, raising=False)
     store = SqliteStore(db_path=db)
     store.upsert_lot(parse_row(make_row("100", ItemStatusDesc="")))
     store.upsert_lot(parse_row(make_row("200", ItemStatusDesc="Sold", HighPrebidValue=1)))
     store.commit()
     store.close()
+    import iaai_scraper.auth as auth_mod
     import iaai_scraper.api as api
+    importlib.reload(auth_mod)
     importlib.reload(api)
     return TestClient(api.app)
 
@@ -51,3 +55,32 @@ def test_readyz_ok_when_db_ready(client):
     body = client.get("/readyz").json()
     assert body["status"] == "ready"
     assert body["lots"] >= 1
+
+
+def test_price_history_endpoint(client):
+    r = client.get("/lots/200/price-history")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["stock_number"] == "200"
+    assert "history" in body
+
+
+def test_price_history_404(client):
+    assert client.get("/lots/missing/price-history").status_code == 404
+
+
+def test_stats_freshness(client):
+    body = client.get("/stats/freshness").json()
+    assert "last_crawl" in body
+    assert "lots_with_price_history" in body
+
+
+def test_filters_endpoint(client):
+    body = client.get("/filters").json()
+    assert "makes" in body
+    assert "models" in body
+    assert "years" in body
+    assert "statuses" in body
+    assert "branches" in body
+    assert isinstance(body["statuses"], list)
+    assert any(s["status"] == "sold" for s in body["statuses"])

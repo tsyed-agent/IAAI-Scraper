@@ -17,5 +17,8 @@ spike/out/
 # Logs
 *.log
 
+# Secrets / local env
+.env
+
 # OS
 .DS_Store
