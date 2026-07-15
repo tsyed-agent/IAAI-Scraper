@@ -17,6 +17,7 @@ def _make_client(monkeypatch, tmp_path, *, token: str | None = TOKEN, require: s
     db = tmp_path / "auth.db"
     monkeypatch.setenv("IAAI_API_TOKEN", token or "")
     monkeypatch.setenv("IAAI_REQUIRE_AUTH", require)
+    monkeypatch.delenv("IAAI_COMMAND_TOKEN", raising=False)
     monkeypatch.setattr(config, "DB_PATH", db, raising=False)
     store = SqliteStore(db_path=db)
     store.upsert_lot(parse_row(make_row("100")))
@@ -74,9 +75,34 @@ def test_commands_crawl_requires_token(authed_client, monkeypatch):
     assert r.status_code == 202
 
 
+def test_commands_can_require_separate_token(monkeypatch, tmp_path):
+    async def _noop_run(self):
+        from datetime import datetime, timezone
+        from iaai_scraper.crawler import CrawlReport
+
+        return CrawlReport(started_at=datetime.now(timezone.utc), status="completed")
+
+    monkeypatch.setattr("iaai_scraper.crawler.Crawler.run", _noop_run)
+    client = _make_client(monkeypatch, tmp_path)
+    monkeypatch.setenv("IAAI_COMMAND_TOKEN", "command-only-secret")
+    read_headers = {"Authorization": f"Bearer {TOKEN}"}
+    command_headers = {"Authorization": "Bearer command-only-secret"}
+
+    assert client.get("/lots", headers=read_headers).status_code == 200
+    assert client.post("/commands/crawl", json={}, headers=read_headers).status_code == 403
+    assert client.post("/commands/crawl", json={}, headers=command_headers).status_code == 202
+
+
 def test_auth_disabled_when_require_false(monkeypatch, tmp_path):
     client = _make_client(monkeypatch, tmp_path, token="", require="false")
     assert client.get("/lots").status_code == 200
+
+
+def test_command_only_token_protects_crawl(monkeypatch, tmp_path):
+    client = _make_client(monkeypatch, tmp_path, token="", require="auto")
+    monkeypatch.setenv("IAAI_COMMAND_TOKEN", "command-only-secret")
+    assert client.get("/lots").status_code == 200
+    assert client.post("/commands/crawl", json={}).status_code == 401
 
 
 def test_startup_fails_when_auth_required_without_token(monkeypatch, tmp_path):

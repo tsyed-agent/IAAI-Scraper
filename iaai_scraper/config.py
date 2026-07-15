@@ -92,6 +92,12 @@ MAX_LIST_PAGES = _env_int("IAAI_MAX_LIST_PAGES", 200)
 # Retries with exponential backoff for transient errors / soft blocks.
 MAX_RETRIES = _env_int("IAAI_MAX_RETRIES", 4)
 BACKOFF_BASE_S = _env_float("IAAI_BACKOFF_BASE", 4.0)
+# Recovery attempts are deliberately separate from transport retries: these
+# cover valid HTTP responses whose page is transiently empty/short/duplicated.
+PAGE_RECOVERY_RETRIES = _env_int("IAAI_PAGE_RECOVERY_RETRIES", 2)
+# Timeout for the in-page fetch itself (the browser navigation timeout does not
+# apply to a fetch started from page JavaScript).
+FETCH_TIMEOUT_S = _env_float("IAAI_FETCH_TIMEOUT", 30.0)
 
 # Detail-page enrichment is OFF by default: it multiplies request volume (one
 # request per lot) and therefore anti-bot exposure and runtime. The list row is
@@ -130,6 +136,8 @@ class CrawlSettings:
     ontario_at_source: bool = ONTARIO_AT_SOURCE
     branch_ids: str = ONTARIO_BRANCH_IDS_CSV if ONTARIO_AT_SOURCE else ""
     ontario_branch_ids: dict[int, str] = field(default_factory=lambda: dict(ONTARIO_BRANCH_IDS))
+    page_recovery_retries: int = PAGE_RECOVERY_RETRIES
+    fetch_timeout_s: float = FETCH_TIMEOUT_S
 
     def is_ontario(self, stock_branch_id, stock_branch_desc) -> bool:
         """True if a lot (by branch id or description) belongs to an Ontario branch."""

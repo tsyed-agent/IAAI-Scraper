@@ -1,4 +1,6 @@
 import asyncio
+import fcntl
+import os
 
 from iaai_scraper import config, crawler as crawler_mod
 from iaai_scraper.crawler import Crawler
@@ -40,11 +42,87 @@ def test_completed_crawl_archives_missing(monkeypatch, tmp_path):
     p1 = [make_row("9001"), make_row("9002")]
     run_crawl(monkeypatch, tmp_path, pages=[(p1, 2)])
     p2 = [make_row("9001")]
+    first_miss, db = run_crawl(monkeypatch, tmp_path, pages=[(p2, 1)])
+    assert first_miss.archived == 0
     report, db = run_crawl(monkeypatch, tmp_path, pages=[(p2, 1)])
     store = SqliteStore(db_path=db)
     assert store.get_lot("9001")["status"] == "active"
     assert store.get_lot("9002")["status"] == "removed"
     assert report.archived == 1
+    store.close()
+
+
+def test_bad_row_is_landed_and_dead_lettered_before_parse(monkeypatch, tmp_path):
+    bad = {"Make": "missing stock"}
+    report, _ = run_crawl(monkeypatch, tmp_path, pages=[([bad], 1)])
+    assert report.status == "failed"
+    import gzip
+    import json
+    raw_files = [
+        path for path in (tmp_path / "raw").glob("**/run-*.jsonl.gz")
+        if ".dlq." not in path.name
+    ]
+    dlq_files = list((tmp_path / "raw").glob("**/run-*.dlq.jsonl.gz"))
+    assert len(raw_files) == 1 and len(dlq_files) == 1
+    with gzip.open(raw_files[0], "rt", encoding="utf-8") as fh:
+        assert json.loads(next(fh)) == bad
+    with gzip.open(dlq_files[0], "rt", encoding="utf-8") as fh:
+        entries = [json.loads(line) for line in fh if line.strip()]
+    assert any(entry["row"] == bad and entry["phase"] == "parse_rejected" for entry in entries)
+
+
+def test_store_initialization_failure_releases_lock(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path, raising=False)
+    monkeypatch.setattr(
+        crawler_mod,
+        "SqliteStore",
+        lambda: (_ for _ in ()).throw(RuntimeError("database unavailable")),
+    )
+    report = asyncio.run(Crawler(config.CrawlSettings()).run())
+    assert report.status == "failed"
+    lock_path = tmp_path / "crawl.lock"
+    assert lock_path.exists()
+    fd = Crawler._acquire_lock(lock_path)
+    Crawler._release_lock(fd, lock_path)
+
+
+def test_active_os_lock_rejects_second_crawler(tmp_path):
+    lock_path = tmp_path / "crawl.lock"
+    owner = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        import pytest
+        with pytest.raises(RuntimeError, match="Another crawl"):
+            Crawler._acquire_lock(lock_path)
+    finally:
+        fcntl.flock(owner, fcntl.LOCK_UN)
+        os.close(owner)
+
+
+def test_raw_finalization_failure_is_recorded(monkeypatch, tmp_path):
+    class FailingCloseWriter(RawWriter):
+        def close(self):
+            super().close()
+            raise OSError("simulated disk failure")
+
+    db = tmp_path / "t.db"
+    raw_dir = tmp_path / "raw"
+    monkeypatch.setattr(config, "DB_PATH", db, raising=False)
+    monkeypatch.setattr(config, "RAW_DIR", raw_dir, raising=False)
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path, raising=False)
+    monkeypatch.setattr(crawler_mod, "IaaiSession", lambda *a, **k: FakeSession())
+    monkeypatch.setattr(
+        crawler_mod, "SearchClient", lambda *a, **k: FakeSearchClient([([make_row("x")], 1)])
+    )
+    monkeypatch.setattr(crawler_mod, "SqliteStore", lambda *a, **k: SqliteStore(db_path=db))
+    monkeypatch.setattr(
+        crawler_mod, "RawWriter", lambda *a, **k: FailingCloseWriter(base_dir=raw_dir)
+    )
+    report = asyncio.run(Crawler(config.CrawlSettings(page_size=1)).run())
+    assert report.status == "failed"
+    assert "raw archive finalization failed" in report.note
+    store = SqliteStore(db_path=db)
+    assert store.stats()["last_run"]["status"] == "failed"
     store.close()
 
 

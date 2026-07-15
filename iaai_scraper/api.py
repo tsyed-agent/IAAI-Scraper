@@ -15,15 +15,19 @@ Authentication (when ``IAAI_REQUIRE_AUTH`` is enabled or ``IAAI_API_TOKEN`` is s
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import json
+import os
 from contextlib import asynccontextmanager
-from typing import Any, Optional
+from datetime import datetime, timezone
+from typing import Any, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from . import config
-from .auth import require_api_auth, validate_startup_auth
+from .auth import require_api_auth, require_command_auth, validate_startup_auth
 from .storage import SqliteStore
 from .sync_manager import sync_manager
 
@@ -36,7 +40,7 @@ async def _lifespan(app: FastAPI):
 
 app = FastAPI(
     title="IAAI Ontario API",
-    version="0.4.0",
+    version="0.5.0",
     description="Query scraped Ontario lots and run crawl commands through one API.",
     lifespan=_lifespan,
 )
@@ -45,8 +49,12 @@ def _store() -> SqliteStore:
     return SqliteStore(db_path=config.DB_PATH)
 
 
-def _hydrate(row: dict[str, Any]) -> dict[str, Any]:
-    if row.get("raw"):
+def _hydrate(row: dict[str, Any], *, include_raw: bool = False) -> dict[str, Any]:
+    """Prepare a DB row for the API without exposing raw source data by default."""
+    row = dict(row)
+    if not include_raw:
+        row.pop("raw", None)
+    elif row.get("raw"):
         try:
             row["raw"] = json.loads(row["raw"])
         except (json.JSONDecodeError, TypeError):
@@ -75,6 +83,48 @@ def _lot_filters(**kwargs: Any) -> dict[str, Any]:
     return {k: v for k, v in kwargs.items() if v is not None}
 
 
+def _encode_cursor(sort: str, descending: bool, value: Any, stock_number: str) -> str:
+    payload = json.dumps(
+        {"v": 1, "sort": sort, "desc": descending, "value": value, "stock": stock_number},
+        separators=(",", ":"),
+    ).encode()
+    return base64.urlsafe_b64encode(payload).decode().rstrip("=")
+
+
+def _decode_cursor(cursor: str, sort: str, descending: bool) -> tuple[Any, str]:
+    if len(cursor) > 2048:
+        raise HTTPException(status_code=400, detail="invalid pagination cursor")
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(padded.encode()).decode())
+        value = payload.get("value") if isinstance(payload, dict) else None
+        text_sorts = {"auction_date", "make", "model", "last_seen", "stock_number"}
+        numeric_sorts = {
+            "year", "odometer", "damage_estimate", "high_prebid", "timed_high_bid",
+            "final_price", "buy_now_price",
+        }
+        if (
+            not isinstance(payload, dict)
+            or payload.get("v") != 1
+            or payload.get("sort") != sort
+            or payload.get("desc") is not descending
+            or not isinstance(payload.get("stock"), str)
+            or "value" not in payload
+            or (value is not None and sort in text_sorts and not isinstance(value, str))
+            or (
+                value is not None
+                and sort in numeric_sorts
+                and (isinstance(value, bool) or not isinstance(value, (int, float)))
+            )
+        ):
+            raise ValueError("cursor contract mismatch")
+        return value, payload["stock"]
+    except (
+        binascii.Error, KeyError, ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError,
+    ) as exc:
+        raise HTTPException(status_code=400, detail="invalid pagination cursor") from exc
+
+
 # ------------------------------------------------------------------ #
 # Meta / health
 # ------------------------------------------------------------------ #
@@ -89,10 +139,45 @@ def readyz(response: Response) -> dict[str, Any]:
     store = _store()
     try:
         n = store.conn.execute("SELECT COUNT(*) AS n FROM lots").fetchone()["n"]
-        return {"status": "ready", "lots": n}
-    except Exception as e:  # noqa: BLE001
+        last_run = store.conn.execute(
+            "SELECT finished_at FROM crawl_runs WHERE status = 'completed' "
+            "ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if n <= 0:
+            response.status_code = 503
+            return {"status": "unavailable", "reason": "inventory_empty", "lots": 0}
+        if not last_run or not last_run["finished_at"]:
+            response.status_code = 503
+            return {
+                "status": "unavailable",
+                "reason": "no_completed_crawl",
+                "lots": n,
+            }
+
+        finished_at = datetime.fromisoformat(str(last_run["finished_at"]).replace("Z", "+00:00"))
+        if finished_at.tzinfo is None:
+            finished_at = finished_at.replace(tzinfo=timezone.utc)
+        age_seconds = max(0.0, (datetime.now(timezone.utc) - finished_at).total_seconds())
+        max_age_hours = float(os.getenv("IAAI_MAX_DATA_AGE_HOURS", "24"))
+        if age_seconds > max_age_hours * 3600:
+            response.status_code = 503
+            return {
+                "status": "stale",
+                "reason": "completed_crawl_too_old",
+                "lots": n,
+                "last_completed_at": finished_at.isoformat(),
+                "age_seconds": round(age_seconds, 1),
+                "max_age_hours": max_age_hours,
+            }
+        return {
+            "status": "ready",
+            "lots": n,
+            "last_completed_at": finished_at.isoformat(),
+            "age_seconds": round(age_seconds, 1),
+        }
+    except Exception:  # noqa: BLE001
         response.status_code = 503
-        return {"status": "unavailable", "error": str(e)}
+        return {"status": "unavailable", "reason": "database_check_failed"}
     finally:
         store.close()
 
@@ -147,7 +232,7 @@ def list_commands() -> dict[str, Any]:
     }
 
 
-@app.post("/commands/crawl", status_code=202, dependencies=[Depends(require_api_auth)])
+@app.post("/commands/crawl", status_code=202, dependencies=[Depends(require_command_auth)])
 async def command_crawl(body: CrawlCommand = CrawlCommand()) -> dict[str, Any]:
     """Start a crawl. Returns immediately; poll ``GET /commands/crawl/status``."""
     if sync_manager.is_running:
@@ -184,7 +269,11 @@ def command_crawl_status() -> dict[str, Any]:
 def list_lots(
     make: Optional[str] = Query(None, description="make or comma-separated makes"),
     model: Optional[str] = Query(None, description="model or comma-separated models"),
-    branch_id: Optional[str] = Query(None, description="branch id or comma-separated ids"),
+    branch_id: Optional[str] = Query(
+        None,
+        pattern=r"^\d+(,\d+)*$",
+        description="branch id or comma-separated ids",
+    ),
     province: Optional[str] = Query(None, description="2-letter code, e.g. ON"),
     title_brand_type: Optional[str] = None,
     auction_type: Optional[str] = None,
@@ -216,12 +305,23 @@ def list_lots(
     is_timed_auction: Optional[bool] = None,
     is_auction_closed: Optional[bool] = None,
     keyword: Optional[str] = Query(None, description="match make/model/damage/stock"),
-    status: str = Query("all", description="active | sold | if_bid | passed | removed | all"),
-    sort: str = Query("auction_date"),
+    status: Literal["active", "sold", "if_bid", "passed", "removed", "all"] = "all",
+    sort: Literal[
+        "auction_date", "year", "make", "model", "odometer", "damage_estimate",
+        "last_seen", "stock_number", "high_prebid", "timed_high_bid", "final_price",
+        "buy_now_price",
+    ] = "auction_date",
     descending: bool = False,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    cursor: Optional[str] = Query(None, description="opaque continuation cursor"),
+    include_raw: bool = Query(False, description="include preserved source payload"),
 ) -> dict[str, Any]:
+    if include_raw and limit > 100:
+        raise HTTPException(status_code=400, detail="include_raw requires limit <= 100")
+    if cursor and offset:
+        raise HTTPException(status_code=400, detail="cursor and non-zero offset are mutually exclusive")
+    after = _decode_cursor(cursor, sort, descending) if cursor else None
     filters = _lot_filters(
         status=status,
         make=make, model=model, branch_id=branch_id, province=province,
@@ -244,35 +344,82 @@ def list_lots(
     store = _store()
     try:
         rows, total = store.query_lots(
-            filters, limit=limit, offset=offset, sort=sort, descending=descending,
+            filters, limit=limit, offset=offset, sort=sort, descending=descending, after=after,
         )
+        next_cursor = None
+        if len(rows) == limit:
+            next_cursor = _encode_cursor(
+                sort, descending, rows[-1][sort], rows[-1]["stock_number"],
+            )
         return {
             "total": total, "limit": limit, "offset": offset,
-            "count": len(rows), "results": [_hydrate(r) for r in rows],
+            "count": len(rows),
+            "next_cursor": next_cursor,
+            "next_offset": offset + len(rows) if not cursor and offset + len(rows) < total else None,
+            "results": [_hydrate(r, include_raw=include_raw) for r in rows],
         }
     finally:
         store.close()
 
 
 @app.get("/lots/{stock_number}", dependencies=[Depends(require_api_auth)])
-def get_lot(stock_number: str) -> dict[str, Any]:
+def get_lot(
+    stock_number: str,
+    include_raw: bool = Query(False, description="include preserved source payload"),
+) -> dict[str, Any]:
     store = _store()
     try:
         row = store.get_lot(stock_number)
         if not row:
             raise HTTPException(status_code=404, detail="lot not found")
-        return _hydrate(row)
+        return _hydrate(row, include_raw=include_raw)
     finally:
         store.close()
 
 
 @app.get("/lots/{stock_number}/price-history", dependencies=[Depends(require_api_auth)])
-def get_price_history(stock_number: str) -> dict[str, Any]:
+def get_price_history(
+    stock_number: str,
+    limit: int = Query(500, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
+) -> dict[str, Any]:
     store = _store()
     try:
         if not store.get_lot(stock_number):
             raise HTTPException(status_code=404, detail="lot not found")
-        history = store.get_price_history(stock_number)
-        return {"stock_number": stock_number, "count": len(history), "history": history}
+        total = store.count_price_history(stock_number)
+        page = store.get_price_history(stock_number, limit=limit, offset=offset)
+        return {
+            "stock_number": stock_number,
+            "total": total,
+            "count": len(page),
+            "limit": limit,
+            "offset": offset,
+            "history": page,
+        }
+    finally:
+        store.close()
+
+
+@app.get("/lots/{stock_number}/status-history", dependencies=[Depends(require_api_auth)])
+def get_status_history(
+    stock_number: str,
+    limit: int = Query(500, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
+) -> dict[str, Any]:
+    store = _store()
+    try:
+        if not store.get_lot(stock_number):
+            raise HTTPException(status_code=404, detail="lot not found")
+        total = store.count_status_history(stock_number)
+        page = store.get_status_history(stock_number, limit=limit, offset=offset)
+        return {
+            "stock_number": stock_number,
+            "total": total,
+            "count": len(page),
+            "limit": limit,
+            "offset": offset,
+            "history": page,
+        }
     finally:
         store.close()

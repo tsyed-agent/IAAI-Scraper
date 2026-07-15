@@ -55,3 +55,28 @@ def test_records_completed_report(monkeypatch):
         assert sm.status()["job"]["report"]["ontario_seen"] == 42
 
     asyncio.run(_run())
+
+
+def test_partial_report_is_not_presented_as_completed(monkeypatch):
+    async def _run():
+        sm = SyncManager()
+        report = CrawlReport(
+            started_at=datetime.now(timezone.utc),
+            status="completed_partial",
+            note="9/10 lots collected",
+        )
+
+        async def _done(self):
+            return report
+
+        monkeypatch.setattr("iaai_scraper.crawler.Crawler.run", _done)
+        job = await sm.start_crawl(config.CrawlSettings())
+        for _ in range(50):
+            if not sm.is_running:
+                break
+            await asyncio.sleep(0.01)
+
+        assert job.status == "partial"
+        assert job.error == "9/10 lots collected"
+
+    asyncio.run(_run())

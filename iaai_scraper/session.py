@@ -146,12 +146,13 @@ class IaaiSession:
         for attempt in range(config.MAX_RETRIES):
             try:
                 result = await self._page.evaluate(_FETCH_JSON_JS,
-                                                   {"path": path, "form": body_pairs})
+                                                   {"path": path, "form": body_pairs,
+                                                    "timeoutMs": max(1, int(self.settings.fetch_timeout_s * 1000))})
                 if result.get("ok") and isinstance(result.get("json"), (dict, list)):
                     return result["json"]
                 # Non-JSON or non-200 => likely a block/interstitial.
                 snippet = (result.get("text") or "")[:200]
-                log.warning("post_json non-JSON (status=%s) attempt %d: %s",
+                log.warning("post_json non-JSON/timeout (status=%s) attempt %d: %s",
                             result.get("status"), attempt, snippet)
                 last_err = BlockedError(f"non-JSON response: {snippet}")
                 await self._resolve_session()
@@ -195,7 +196,9 @@ class IaaiSession:
 
 # JS executed inside the page: POST form-encoded body, return {ok,status,json|text}.
 _FETCH_JSON_JS = """
-async ({path, form}) => {
+async ({path, form, timeoutMs}) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const body = new URLSearchParams(form).toString();
     const resp = await fetch(path, {
@@ -206,12 +209,16 @@ async ({path, form}) => {
       },
       body,
       credentials: 'include',
+      signal: controller.signal,
     });
     const text = await resp.text();
     try { return {ok: resp.ok, status: resp.status, json: JSON.parse(text)}; }
     catch (e) { return {ok: false, status: resp.status, text: text.slice(0, 500)}; }
   } catch (e) {
-    return {ok: false, status: 0, text: String(e)};
+    return {ok: false, status: 0,
+      timeout: e && e.name === 'AbortError', text: String(e)};
+  } finally {
+    clearTimeout(timer);
   }
 }
 """

@@ -23,6 +23,12 @@ def api_token() -> Optional[str]:
     return token or None
 
 
+def command_token() -> Optional[str]:
+    """Token for mutating command routes; defaults to the read API token."""
+    token = os.getenv("IAAI_COMMAND_TOKEN", "").strip()
+    return token or api_token()
+
+
 def require_auth_enabled() -> bool:
     """True when requests must present ``IAAI_API_TOKEN``."""
     mode = os.getenv("IAAI_REQUIRE_AUTH", "auto").strip().lower()
@@ -66,9 +72,11 @@ def _extract_token(
 def verify_request_token(
     authorization: Optional[str],
     x_api_key: Optional[str],
+    *,
+    expected: Optional[str] = None,
 ) -> None:
     """Raise HTTPException when the request token is missing or invalid."""
-    expected = api_token()
+    expected = expected or api_token()
     if not expected:
         raise HTTPException(
             status_code=503,
@@ -92,3 +100,18 @@ def require_api_auth(
         return
     verify_request_token(authorization, x_api_key)
 
+
+def require_command_auth(
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+) -> None:
+    """Require the optional command token for crawler-triggering routes."""
+    # A command-only deployment must still protect the resource-intensive
+    # browser crawl even when the read API is intentionally public.
+    if not require_auth_enabled() and command_token() is None:
+        return
+    verify_request_token(
+        authorization,
+        x_api_key,
+        expected=command_token(),
+    )

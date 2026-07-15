@@ -21,7 +21,7 @@ log = logging.getLogger("iaai.sync")
 @dataclass
 class CrawlJob:
     job_id: str
-    status: str = "queued"          # queued | running | completed | failed
+    status: str = "queued"          # queued | running | completed | partial | failed
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     report: Optional[CrawlReport] = None
@@ -72,9 +72,16 @@ class SyncManager:
         try:
             report = await Crawler(settings).run()
             job.report = report
-            job.status = "failed" if report.status == "failed" else "completed"
+            if report.status == "completed":
+                job.status = "completed"
+            elif report.status == "failed":
+                job.status = "failed"
+            else:
+                job.status = "partial"
             if report.status == "failed":
                 job.error = report.note
+            elif job.status == "partial":
+                job.error = report.note or f"crawl ended with status={report.status}"
         except Exception as e:  # noqa: BLE001
             job.status = "failed"
             job.error = f"{type(e).__name__}: {e}"

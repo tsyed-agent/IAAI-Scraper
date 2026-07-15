@@ -10,12 +10,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
 
 import typer
 
 from . import config
 from .crawler import Crawler
-from .storage import SqliteStore
+from .storage import SqliteStore, backup_sqlite
 
 app = typer.Typer(add_completion=False, help="IAAI Ontario scraper")
 
@@ -53,6 +56,10 @@ def crawl(
     report = asyncio.run(Crawler(settings).run())
     typer.echo(report.summary())
     typer.echo("Ontario by branch: " + json.dumps(report.ontario_by_branch))
+    # A partial/unknown snapshot is useful diagnostic output but must not be
+    # mistaken for a successful scheduled crawl.
+    if report.status != "completed":
+        raise typer.Exit(code=1)
 
 
 @app.command()
@@ -63,6 +70,23 @@ def stats() -> None:
         typer.echo(json.dumps(store.stats(), indent=2, default=str))
     finally:
         store.close()
+
+
+@app.command()
+def backup(
+    destination: Optional[Path] = typer.Option(
+        None,
+        "--destination",
+        "-d",
+        help="snapshot path (default: data/backups/<timestamp>.db)",
+    ),
+) -> None:
+    """Create an atomic online SQLite snapshot for off-host retention."""
+    if destination is None:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        destination = config.DATA_DIR / "backups" / f"iaai-ontario-{stamp}.db"
+    path = backup_sqlite(config.DB_PATH, destination)
+    typer.echo(str(path))
 
 
 @app.command()
