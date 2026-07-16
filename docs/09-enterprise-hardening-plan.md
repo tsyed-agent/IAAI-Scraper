@@ -127,7 +127,7 @@ on the API hot path or become expensive to retrofit once real history accumulate
 | 0.3 | ✅ done | **Add `source_observed_at` and `currency` columns to `price_history`** (mandated by §4), populated from `Lot.server_observed_at` / `Lot.currency`. | storage DDL, `_MIGRATIONS`, `_record_price_changes` | `test_price_history_carries_provenance`; idempotent migration. |
 | 0.4 | ✅ done | **Stop dual-writing `status_*` rows into `price_history`.** `lot_status_history` is the only lifecycle log; legacy `status_*` rows are filtered out of `GET /lots/{stock}/price-history`. | `storage._record_status_change`, `get_price_history`/`count_price_history` | Price-history responses contain only real price types; `test_legacy_status_rows_hidden_from_price_history`. |
 | 0.5 | ✅ done | **Thumbnail cache hardening:** per-key single-flight lock (N concurrent first viewers → one upstream fetch); negative caching of upstream failures (default 10 min); stale-on-error (serve last good thumb when a refetch fails); `evict()`/`sweep()` with removed-lot eviction + TTL sweep wired into API startup. | `iaai_scraper/images.py`, `api._lifespan`, config `IAAI_IMAGE_NEGATIVE_TTL` / `IAAI_IMAGE_CACHE_TTL` | Meets doc 10 N5; concurrency, negative-cache, stale-serve, and evict/sweep tests. |
-| 0.6 | ⏳ open | **No tokens in logs.** `?api_key=` lands in uvicorn/proxy access logs; add log redaction and replace with short-lived signed media URLs before any UI GA. | logging config / gateway; later `auth.py` | Grep of access logs shows no token material. |
+| 0.6 | ✅ done | **No tokens in logs / signed media URLs.** Access-log redaction (`logging_utils.AccessLogTokenRedactor`); `thumbnail_href` carries short-lived `?expires=&sig=` HMAC; deprecated `?api_key=` still accepted. | `logging_utils.py`, `auth.sign_media_path` / `require_api_auth_flexible`, `api._hydrate` | Grep of access logs shows no token/sig material; signed URL auth tests. |
 | 0.7 | ✅ done | **`/readyz` reachable by probes.** `IAAI_READYZ_PUBLIC=true` exempts the route from auth (it exposes only counts/timestamps). | `auth.require_readyz_auth` | `test_readyz_public_env_allows_unauthenticated_probe`. |
 | 0.8 | ✅ done | **Fix `sold_from`/`sold_to` semantics** — they filtered `status_updated_at` for *any* status; now they also require a concluded outcome. | `storage._build_where` | `test_sold_filter_excludes_non_concluded_status_changes`. |
 | 0.9 | ✅ done | **Tie `--canada-wide` page-size default to the flag** (legacy verified max is 100, not 1000). | `cli.py`, `api.CrawlCommand.resolved_page_size` | CLI + API tests cover both modes and explicit override. |
@@ -135,9 +135,10 @@ on the API hot path or become expensive to retrofit once real history accumulate
 | 0.11 | ◐ partial | **In-container crawl.** Added a `/dev/shm` tmpfs so Chromium has shared memory under `read_only: true`. Live verification of `POST /commands/crawl` inside the container remains open. | `docker-compose.yml` | Crawl completes inside the container (manual check). |
 | 0.12 | ⏳ deferred | Unchanged lots still get a full ~60-column row rewrite (including the raw blob) every crawl; update only `last_seen`/`missing_run_count` on the unchanged path. | `storage.upsert_lot` | Revisit at multi-source scale; harmless at 1.5k lots. |
 
-**Exit:** suite green (123 tests as of 2026-07-16); read path proven write-free;
-redirect, eviction, negative-cache, and single-flight tests pass. Remaining:
-0.6 (gateway/log redaction + signed media URLs) and the 0.11 manual container check.
+**Exit:** suite green (132 tests as of 2026-07-16 after 0.6a/0.6b); read path
+proven write-free; redirect, eviction, negative-cache, single-flight, access-log
+redaction, and signed media URL tests pass. Remaining: the 0.11 manual container
+check.
 
 ### Phase A — Recovery and correctness baseline ✅ (landed in PR #6)
 

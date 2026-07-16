@@ -124,6 +124,168 @@ def test_thumbnail_accepts_api_key_query(authed_client, monkeypatch):
     assert r.headers["x-image-cache"] == "MISS"
 
 
+def test_lots_thumbnail_href_is_signed(authed_client):
+    r = authed_client.get("/lots/100", headers={"Authorization": f"Bearer {TOKEN}"})
+    assert r.status_code == 200
+    href = r.json()["thumbnail_href"]
+    assert href.startswith("/lots/100/thumbnail?expires=")
+    assert "&sig=" in href
+
+
+def test_thumbnail_accepts_valid_signed_url(authed_client, monkeypatch):
+    monkeypatch.setattr(
+        "iaai_scraper.images._default_fetch",
+        lambda url, timeout_s: (b"\xff\xd8\xffx", "image/jpeg"),
+    )
+    lot = authed_client.get("/lots/100", headers={"Authorization": f"Bearer {TOKEN}"})
+    href = lot.json()["thumbnail_href"]
+    r = authed_client.get(href)  # no Authorization header
+    assert r.status_code == 200
+    assert r.headers["cache-control"].startswith("public, max-age=")
+    directives = {
+        name: value
+        for directive in r.headers["cache-control"].split(",")
+        if "=" in directive
+        for name, value in (directive.strip().split("=", 1),)
+    }
+    assert 0 < int(directives["max-age"]) <= config.MEDIA_URL_TTL_S
+    assert 0 < int(directives["s-maxage"]) <= config.MEDIA_URL_TTL_S
+
+
+def test_thumbnail_header_auth_keeps_configured_cache_control(authed_client, monkeypatch):
+    monkeypatch.setattr(
+        "iaai_scraper.images._default_fetch",
+        lambda url, timeout_s: (b"\xff\xd8\xffx", "image/jpeg"),
+    )
+    r = authed_client.get(
+        "/lots/100/thumbnail",
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == config.IMAGE_CACHE_CONTROL
+
+
+def test_thumbnail_signed_url_with_header_still_caps_cache(authed_client, monkeypatch):
+    monkeypatch.setattr(
+        "iaai_scraper.images._default_fetch",
+        lambda url, timeout_s: (b"\xff\xd8\xffx", "image/jpeg"),
+    )
+    lot = authed_client.get("/lots/100", headers={"Authorization": f"Bearer {TOKEN}"})
+    r = authed_client.get(
+        lot.json()["thumbnail_href"],
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    assert r.status_code == 200
+    assert r.headers["cache-control"].startswith("public, max-age=")
+    directives = {
+        name: value
+        for directive in r.headers["cache-control"].split(",")
+        if "=" in directive
+        for name, value in (directive.strip().split("=", 1),)
+    }
+    assert 0 < int(directives["max-age"]) <= config.MEDIA_URL_TTL_S
+    assert 0 < int(directives["s-maxage"]) <= config.MEDIA_URL_TTL_S
+
+
+@pytest.mark.parametrize(
+    "query",
+    (
+        "expires=2000000000",
+        "sig=not-a-signature",
+        "expires=not-a-timestamp&sig=not-a-signature",
+    ),
+)
+def test_thumbnail_header_auth_with_invalid_signed_params_is_no_store(
+    authed_client, monkeypatch, query,
+):
+    monkeypatch.setattr(
+        "iaai_scraper.images._default_fetch",
+        lambda url, timeout_s: (b"\xff\xd8\xffx", "image/jpeg"),
+    )
+    r = authed_client.get(
+        f"/lots/100/thumbnail?{query}",
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "no-store"
+
+
+def test_signed_media_cache_control_caps_expiry_and_removes_stale_windows():
+    from iaai_scraper.auth import signed_media_cache_control
+
+    base = (
+        "public, max-age=86400, s-maxage=86400, "
+        "stale-while-revalidate=60, stale-if-error=120"
+    )
+    assert signed_media_cache_control(1_000 + 900, now=1_000, base=base) == (
+        "public, max-age=900, s-maxage=900"
+    )
+    assert signed_media_cache_control(1_001, now=1_000, base=base) == (
+        "public, max-age=1, s-maxage=1"
+    )
+    assert signed_media_cache_control(
+        1_900, now=1_000, base="public, s-maxage=86400",
+    ) == "public, s-maxage=900, max-age=900"
+    assert signed_media_cache_control(
+        1_900, now=1_000, base="private, max-age=86400",
+    ) == "private, max-age=900, s-maxage=900"
+
+
+def test_thumbnail_signed_cache_control_near_expiry(authed_client, monkeypatch):
+    import iaai_scraper.auth as auth_mod
+    from iaai_scraper.auth import sign_media_path
+
+    monkeypatch.setattr(
+        "iaai_scraper.images._default_fetch",
+        lambda url, timeout_s: (b"\xff\xd8\xffx", "image/jpeg"),
+    )
+    monkeypatch.setattr(auth_mod.time, "time", lambda: 2_000)
+    path = "/lots/100/thumbnail"
+    expires = 2_001
+    sig = sign_media_path(path, expires, key=TOKEN)
+    r = authed_client.get(f"{path}?expires={expires}&sig={sig}")
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "public, max-age=1, s-maxage=1"
+
+
+def test_thumbnail_rejects_expired_signature(authed_client, monkeypatch):
+    from iaai_scraper.auth import sign_media_path
+
+    monkeypatch.setattr(
+        "iaai_scraper.images._default_fetch",
+        lambda url, timeout_s: (b"\xff\xd8\xffx", "image/jpeg"),
+    )
+    path = "/lots/100/thumbnail"
+    expires = 1_700_000_000  # firmly in the past relative to 2026
+    sig = sign_media_path(path, expires, key=TOKEN)
+    r = authed_client.get(f"{path}?expires={expires}&sig={sig}")
+    assert r.status_code == 401
+
+
+def test_thumbnail_rejects_tampered_signature(authed_client, monkeypatch):
+    monkeypatch.setattr(
+        "iaai_scraper.images._default_fetch",
+        lambda url, timeout_s: (b"\xff\xd8\xffx", "image/jpeg"),
+    )
+    lot = authed_client.get("/lots/100", headers={"Authorization": f"Bearer {TOKEN}"})
+    href = lot.json()["thumbnail_href"]
+    # Flip last hex nibble of the signature
+    bad = href[:-1] + ("0" if href[-1] != "0" else "1")
+    assert authed_client.get(bad).status_code == 401
+
+
+def test_sign_media_path_round_trip():
+    from iaai_scraper.auth import sign_media_path, verify_media_signature
+
+    path = "/lots/100/thumbnail"
+    expires = 2_000_000_000
+    sig = sign_media_path(path, expires, key="sekrit")
+    assert verify_media_signature(path, expires, sig, key="sekrit", now=expires - 10)
+    assert not verify_media_signature(path, expires, sig, key="sekrit", now=expires + 1)
+    assert not verify_media_signature(path, expires, "deadbeef", key="sekrit", now=expires - 10)
+    assert not verify_media_signature("/lots/999/thumbnail", expires, sig, key="sekrit", now=expires - 10)
+
+
 def test_readyz_public_env_allows_unauthenticated_probe(monkeypatch, tmp_path):
     client = _make_client(monkeypatch, tmp_path)
     assert client.get("/readyz").status_code == 401

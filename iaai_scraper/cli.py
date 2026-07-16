@@ -97,6 +97,11 @@ def backup(
 def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
     """Run the internal read API."""
     import uvicorn
+
+    from .logging_utils import install_access_log_redaction
+
+    # Thumbnail routes accept ?api_key= for <img src>; never log the token.
+    install_access_log_redaction()
     uvicorn.run("iaai_scraper.api:app", host=host, port=port, reload=False)
 
 

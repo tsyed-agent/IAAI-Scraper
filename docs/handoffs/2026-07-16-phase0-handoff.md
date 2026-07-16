@@ -8,6 +8,9 @@
 > (release gates, phases) and
 > [`docs/10-implementation-plan.md`](../10-implementation-plan.md) (media/UI
 > checklists). This handoff tells you where we are inside those plans.
+>
+> **Status board:** [`docs/project-tracker.html`](../project-tracker.html) —
+> update the task you touch (see [`project-tracker.md`](../project-tracker.md)).
 
 ---
 
@@ -128,25 +131,12 @@ main (a3e8a93)
 > Run `python -m pytest -q` before and after; all 123+ tests must pass.
 > Never add a test that touches the network (loopback servers are OK).
 
-### Task A — Access-log token redaction (doc 09 Phase 0 item 0.6a)
+### Task A — Access-log token redaction (doc 09 Phase 0 item 0.6a) ✅
 
-**Problem:** the thumbnail route accepts `?api_key=<token>` (needed for
-`<img src>`), so the read token lands in uvicorn access logs.
-
-**Do this:**
-1. In `iaai_scraper/cli.py` `serve` command, configure uvicorn with a custom
-   access-log filter: add a `logging.Filter` subclass (put it in
-   `iaai_scraper/api.py` or a new `iaai_scraper/logging_utils.py`) whose
-   `filter(record)` rewrites `api_key=<value>` to `api_key=REDACTED` in
-   `record.args`/`record.msg` (uvicorn access records carry the request line in
-   `record.args`). Attach it to the `uvicorn.access` logger inside `serve()`
-   before `uvicorn.run(...)`.
-2. Test (offline): build the filter, feed it a fake `LogRecord` whose args
-   contain `GET /lots/100/thumbnail?api_key=sekrit HTTP/1.1`, assert the
-   formatted output contains `REDACTED` and not `sekrit`.
-
-**Acceptance:** test passes; `python -m iaai_scraper.cli serve` +
-`curl "...thumbnail?api_key=x"` shows a redacted access log line (manual check).
+**Status:** implemented on branch `codex/phase0-access-log-redaction`.
+`iaai_scraper/logging_utils.py` provides `AccessLogTokenRedactor`;
+`cli.serve` installs it on `uvicorn.access` before `uvicorn.run`. Offline
+tests in `tests/test_logging_utils.py`.
 
 ### Task B — Verify the in-container crawl (doc 09 Phase 0 item 0.11)
 
@@ -165,28 +155,12 @@ crashes with shm/sandbox errors despite the `/dev/shm` tmpfs, add
 `iaai_scraper/session.py` (look for the `playwright` browser launch call) and
 re-test. Record the result in doc 09 Phase 0 row 0.11 (flip ◐ to ✅).
 
-### Task C — Signed short-lived media URLs (doc 09 Phase 0 item 0.6b)
+### Task C — Signed short-lived media URLs (doc 09 Phase 0 item 0.6b) ✅
 
-**Problem:** even redacted, a long-lived static token in an `<img>` URL is
-weak. Replace `?api_key=` with expiring HMAC-signed URLs before any UI ships.
-
-**Do this:**
-1. In `iaai_scraper/auth.py` add:
-   - `sign_media_path(path: str, expires_at: int) -> str` returning
-     `hmac.new(key=IAAI_API_TOKEN.encode(), msg=f"{path}:{expires_at}".encode(), sha256).hexdigest()`.
-   - `verify_media_signature(path, expires_at, signature) -> bool` using
-     `hmac.compare_digest` and `expires_at > time.time()`.
-2. In `iaai_scraper/api.py` `_hydrate`: when building `thumbnail_href`, append
-   `?expires=<now+900>&sig=<sign_media_path(...)>` (15-minute validity).
-3. In `require_api_auth_flexible` (or a new `require_media_auth`): accept
-   *either* a valid header token *or* valid `expires`+`sig` query params on the
-   thumbnail route. Keep `?api_key=` working for one release (deprecated), then
-   remove.
-4. Tests: valid signature → 200; expired → 401; tampered path or sig → 401/403;
-   header token still works.
-
-**Acceptance:** tests pass; `GET /lots` responses contain signed
-`thumbnail_href` values that load without any header.
+**Status:** implemented on branch `codex/phase0-signed-media-urls`.
+`auth.sign_media_path` / `verify_media_signature` / `media_signed_href`;
+`_hydrate` embeds `?expires=&sig=`; thumbnail auth accepts header, signed query,
+or deprecated `?api_key=`. Offline tests in `tests/test_api_auth.py`.
 
 ### Task D — Scheduler + whole-run retry (doc 09 §6, P0 "durable worker" start)
 
