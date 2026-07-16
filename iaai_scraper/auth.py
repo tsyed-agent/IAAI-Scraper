@@ -182,11 +182,13 @@ def signed_media_cache_control(
                 value = str(remaining)
             directive = f"{name.strip()}={value}"
         directives.append(directive)
-    if not any(
-        directive.split("=", 1)[0].strip().lower() in {"max-age", "s-maxage"}
+    present = {
+        directive.split("=", 1)[0].strip().lower()
         for directive in directives
-    ):
-        directives.append(f"max-age={remaining}")
+    }
+    for name in ("max-age", "s-maxage"):
+        if name not in present:
+            directives.append(f"{name}={remaining}")
     return ", ".join(directive for directive in directives if directive)
 
 
@@ -211,7 +213,7 @@ def require_api_auth_flexible(
         None,
         description="Deprecated: long-lived token for <img src>; prefer expires+sig",
     ),
-    expires: Optional[int] = Query(
+    expires: Optional[str] = Query(
         None,
         description="Unix expiry for signed media URL (thumbnail route)",
     ),
@@ -233,6 +235,10 @@ def require_api_auth_flexible(
 
     provided = _extract_token(authorization, x_api_key or api_key)
     if provided and secrets.compare_digest(provided, expected):
+        if expires is not None or sig:
+            if verify_media_signature(request.url.path, expires, sig, key=expected):
+                return "signed"
+            return "signed-invalid"
         return "header"
 
     if expires is not None or sig:

@@ -27,7 +27,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from . import config
@@ -431,8 +431,8 @@ def get_lot(
 @app.get("/lots/{stock_number}/thumbnail")
 def get_lot_thumbnail(
     stock_number: str,
-    expires: Optional[int] = Query(None),
-    auth_mode: str = Depends(require_api_auth_flexible),
+    request: Request,
+    _auth_mode: str = Depends(require_api_auth_flexible),
 ) -> Response:
     """Serve a cached thumbnail for a lot (fetch-on-miss from allowlisted ``image_url``)."""
     store = _store()
@@ -456,12 +456,14 @@ def get_lot_thumbnail(
     except ImageFetchError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    cache_control = config.IMAGE_CACHE_CONTROL
+    if _auth_mode == "signed":
+        cache_control = signed_media_cache_control(request.query_params.get("expires"))
+    elif _auth_mode == "signed-invalid":
+        cache_control = "no-store"
+
     headers = {
-        "Cache-Control": (
-            signed_media_cache_control(expires)
-            if auth_mode == "signed"
-            else config.IMAGE_CACHE_CONTROL
-        ),
+        "Cache-Control": cache_control,
         "X-Image-Cache": "HIT" if thumb.from_cache else "MISS",
     }
     return Response(content=thumb.body, media_type=thumb.content_type, headers=headers)
