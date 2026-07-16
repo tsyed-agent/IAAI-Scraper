@@ -13,7 +13,8 @@ After any task you finish, block, or test:
 3. Link PR/commit on that task when available; bump board `data-updated`.
 4. Do not paste logs or rewrite plan docs into the HTML.
 
-Plans (acceptance detail): `docs/09-…`, `docs/10-…`, `docs/ops-scheduling.md`.
+Plans (acceptance detail): `docs/09-…`, `docs/10-…`, `docs/ops-scheduling.md`,
+and `docs/handoffs/`.
 
 ## Project
 
@@ -21,8 +22,8 @@ Plans (acceptance detail): `docs/09-…`, `docs/10-…`, `docs/ops-scheduling.md
 Ontario auction lots. Playwright clears Imperva; data lands in SQLite + raw JSONL;
 FastAPI serves a private read/command API. Single package `iaai_scraper`.
 
-Code is on `main` (PRs #6/#7 merged). Open follow-ups: PR #8 (Phase 0 media),
-PR #9 (scheduler). Prefer small task branches off updated `main`.
+Code is on `main` (PRs #6/#7/#8 merged). Open follow-up: PR #9 (scheduler).
+Prefer small task branches off updated `main`.
 
 **Crawler runs on a host you control** (CLI / Docker / cron). GitHub Actions is
 CI (`pytest`) only — not the live scrape.
@@ -40,9 +41,10 @@ Activate a local venv first (`.venv/` may be a broken Linux copy — use
 
 ## Non-obvious notes
 
-- Do **not** run casual live crawls — authorization + anti-bot risk (doc 09).
+- Live crawl can work without proxy from some environments; do **not** run
+  casual live crawls — authorization + anti-bot risk (see doc 09).
 - Outputs under `data/` are gitignored; never commit DB/raw.
 - No ruff/black config; `python -m py_compile iaai_scraper/*.py tests/*.py` is fine.
 - Ignore `.venv*/` and `graphify-out/` (otherwise Cursor shows ~900k fake diffs).
 - Graphify: if `graphify-out/` exists, orient with `graphify query` before broad
-  exploration; run `graphify update .` after code edits.
+  codebase exploration; run `graphify update .` after code edits.

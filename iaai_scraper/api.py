@@ -12,7 +12,8 @@ Commands (same process, shared crawler logic):
 
 Authentication (when ``IAAI_REQUIRE_AUTH`` is enabled or ``IAAI_API_TOKEN`` is set):
   All routes except ``GET /healthz`` require ``Authorization: Bearer <token>``
-  or ``X-API-Key: <token>``. Thumbnail also accepts ``?api_key=`` for ``<img src>``.
+  or ``X-API-Key: <token>``. Thumbnail also accepts short-lived ``?expires=&sig=``
+  (preferred for ``<img src>``) or deprecated ``?api_key=``.
   Set ``IAAI_API_TOKEN`` in production / Docker.
 """
 from __future__ import annotations
@@ -26,15 +27,17 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from . import config
 from .auth import (
+    media_signed_href,
     require_api_auth,
     require_api_auth_flexible,
     require_command_auth,
     require_readyz_auth,
+    signed_media_cache_control,
     validate_startup_auth,
 )
 from .images import (
@@ -104,9 +107,10 @@ def _hydrate(row: dict[str, Any], *, include_raw: bool = False) -> dict[str, Any
         if row.get(b) is not None:
             row[b] = bool(row[b])
     # Stable local pointer for the UI; crawl still only stores image_url text.
+    # When auth is configured, embed a short-lived HMAC so <img> needs no header.
     stock = row.get("stock_number")
     if stock and row.get("image_url"):
-        row["thumbnail_href"] = f"/lots/{stock}/thumbnail"
+        row["thumbnail_href"] = media_signed_href(f"/lots/{stock}/thumbnail")
     else:
         row["thumbnail_href"] = None
     return row
@@ -424,8 +428,12 @@ def get_lot(
         store.close()
 
 
-@app.get("/lots/{stock_number}/thumbnail", dependencies=[Depends(require_api_auth_flexible)])
-def get_lot_thumbnail(stock_number: str) -> Response:
+@app.get("/lots/{stock_number}/thumbnail")
+def get_lot_thumbnail(
+    stock_number: str,
+    request: Request,
+    _auth_mode: str = Depends(require_api_auth_flexible),
+) -> Response:
     """Serve a cached thumbnail for a lot (fetch-on-miss from allowlisted ``image_url``)."""
     store = _store()
     try:
@@ -448,8 +456,14 @@ def get_lot_thumbnail(stock_number: str) -> Response:
     except ImageFetchError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    cache_control = config.IMAGE_CACHE_CONTROL
+    if _auth_mode == "signed":
+        cache_control = signed_media_cache_control(request.query_params.get("expires"))
+    elif _auth_mode == "signed-invalid":
+        cache_control = "no-store"
+
     headers = {
-        "Cache-Control": config.IMAGE_CACHE_CONTROL,
+        "Cache-Control": cache_control,
         "X-Image-Cache": "HIT" if thumb.from_cache else "MISS",
     }
     return Response(content=thumb.body, media_type=thumb.content_type, headers=headers)
