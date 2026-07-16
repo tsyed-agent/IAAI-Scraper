@@ -146,6 +146,50 @@ def verify_media_signature(
     return secrets.compare_digest(expected, signature)
 
 
+def signed_media_cache_control(
+    expires_at: Optional[Union[int, str]],
+    *,
+    now: Optional[float] = None,
+    base: Optional[str] = None,
+) -> str:
+    """Cap cache freshness at the remaining lifetime of a signed URL."""
+    from . import config
+
+    cache_control = base if base is not None else config.IMAGE_CACHE_CONTROL
+    try:
+        remaining = int(expires_at) - int(now if now is not None else time.time())
+    except (TypeError, ValueError):
+        return "no-store"
+    if remaining <= 0:
+        return "no-store"
+    if any(
+        directive.strip().lower() == "no-store"
+        for directive in cache_control.split(",")
+    ):
+        return cache_control
+
+    directives = []
+    for directive in cache_control.split(","):
+        directive = directive.strip()
+        name, _, value = directive.partition("=")
+        normalized = name.strip().lower()
+        if normalized in {"stale-while-revalidate", "stale-if-error"}:
+            continue
+        if normalized in {"max-age", "s-maxage"}:
+            try:
+                value = str(min(int(value.strip()), remaining))
+            except ValueError:
+                value = str(remaining)
+            directive = f"{name.strip()}={value}"
+        directives.append(directive)
+    if not any(
+        directive.split("=", 1)[0].strip().lower() in {"max-age", "s-maxage"}
+        for directive in directives
+    ):
+        directives.append(f"max-age={remaining}")
+    return ", ".join(directive for directive in directives if directive)
+
+
 def media_signed_href(path: str, *, ttl_s: Optional[int] = None) -> str:
     """Build ``path?expires=…&sig=…`` when API auth is on; else bare path."""
     from . import config
@@ -175,10 +219,10 @@ def require_api_auth_flexible(
         None,
         description="HMAC signature for signed media URL (thumbnail route)",
     ),
-) -> None:
+) -> str:
     """Auth for media: header token, signed ``expires``+``sig``, or deprecated ``api_key``."""
     if not require_auth_enabled():
-        return
+        return "unauthenticated"
 
     expected = api_token()
     if not expected:
@@ -189,11 +233,11 @@ def require_api_auth_flexible(
 
     provided = _extract_token(authorization, x_api_key or api_key)
     if provided and secrets.compare_digest(provided, expected):
-        return
+        return "header"
 
     if expires is not None or sig:
         if verify_media_signature(request.url.path, expires, sig, key=expected):
-            return
+            return "signed"
         raise HTTPException(
             status_code=401,
             detail="invalid or expired media signature",

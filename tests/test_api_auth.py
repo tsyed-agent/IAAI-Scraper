@@ -141,6 +141,53 @@ def test_thumbnail_accepts_valid_signed_url(authed_client, monkeypatch):
     href = lot.json()["thumbnail_href"]
     r = authed_client.get(href)  # no Authorization header
     assert r.status_code == 200
+    assert r.headers["cache-control"].startswith("public, max-age=")
+    assert int(r.headers["cache-control"].split("max-age=", 1)[1]) <= config.MEDIA_URL_TTL_S
+
+
+def test_thumbnail_header_auth_keeps_configured_cache_control(authed_client, monkeypatch):
+    monkeypatch.setattr(
+        "iaai_scraper.images._default_fetch",
+        lambda url, timeout_s: (b"\xff\xd8\xffx", "image/jpeg"),
+    )
+    r = authed_client.get(
+        "/lots/100/thumbnail",
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == config.IMAGE_CACHE_CONTROL
+
+
+def test_signed_media_cache_control_caps_expiry_and_removes_stale_windows():
+    from iaai_scraper.auth import signed_media_cache_control
+
+    base = (
+        "public, max-age=86400, s-maxage=86400, "
+        "stale-while-revalidate=60, stale-if-error=120"
+    )
+    assert signed_media_cache_control(1_000 + 900, now=1_000, base=base) == (
+        "public, max-age=900, s-maxage=900"
+    )
+    assert signed_media_cache_control(1_001, now=1_000, base=base) == (
+        "public, max-age=1, s-maxage=1"
+    )
+
+
+def test_thumbnail_signed_cache_control_near_expiry(authed_client, monkeypatch):
+    import iaai_scraper.auth as auth_mod
+    from iaai_scraper.auth import sign_media_path
+
+    monkeypatch.setattr(
+        "iaai_scraper.images._default_fetch",
+        lambda url, timeout_s: (b"\xff\xd8\xffx", "image/jpeg"),
+    )
+    monkeypatch.setattr(auth_mod.time, "time", lambda: 2_000)
+    path = "/lots/100/thumbnail"
+    expires = 2_001
+    sig = sign_media_path(path, expires, key=TOKEN)
+    r = authed_client.get(f"{path}?expires={expires}&sig={sig}")
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "public, max-age=1"
 
 
 def test_thumbnail_rejects_expired_signature(authed_client, monkeypatch):
