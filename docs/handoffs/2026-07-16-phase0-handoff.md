@@ -8,6 +8,9 @@
 > (release gates, phases) and
 > [`docs/10-implementation-plan.md`](../10-implementation-plan.md) (media/UI
 > checklists). This handoff tells you where we are inside those plans.
+>
+> **Status board:** [`docs/project-tracker.html`](../project-tracker.html) —
+> update the task you touch (see [`project-tracker.md`](../project-tracker.md)).
 
 ---
 
@@ -128,25 +131,12 @@ main (a3e8a93)
 > Run `python -m pytest -q` before and after; all 123+ tests must pass.
 > Never add a test that touches the network (loopback servers are OK).
 
-### Task A — Access-log token redaction (doc 09 Phase 0 item 0.6a)
+### Task A — Access-log token redaction (doc 09 Phase 0 item 0.6a) ✅
 
-**Problem:** the thumbnail route accepts `?api_key=<token>` (needed for
-`<img src>`), so the read token lands in uvicorn access logs.
-
-**Do this:**
-1. In `iaai_scraper/cli.py` `serve` command, configure uvicorn with a custom
-   access-log filter: add a `logging.Filter` subclass (put it in
-   `iaai_scraper/api.py` or a new `iaai_scraper/logging_utils.py`) whose
-   `filter(record)` rewrites `api_key=<value>` to `api_key=REDACTED` in
-   `record.args`/`record.msg` (uvicorn access records carry the request line in
-   `record.args`). Attach it to the `uvicorn.access` logger inside `serve()`
-   before `uvicorn.run(...)`.
-2. Test (offline): build the filter, feed it a fake `LogRecord` whose args
-   contain `GET /lots/100/thumbnail?api_key=sekrit HTTP/1.1`, assert the
-   formatted output contains `REDACTED` and not `sekrit`.
-
-**Acceptance:** test passes; `python -m iaai_scraper.cli serve` +
-`curl "...thumbnail?api_key=x"` shows a redacted access log line (manual check).
+**Status:** implemented on branch `codex/phase0-access-log-redaction`.
+`iaai_scraper/logging_utils.py` provides `AccessLogTokenRedactor`;
+`cli.serve` installs it on `uvicorn.access` before `uvicorn.run`. Offline
+tests in `tests/test_logging_utils.py`.
 
 ### Task B — Verify the in-container crawl (doc 09 Phase 0 item 0.11)
 

@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en" data-updated="2026-07-16T20:45">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IAAI-Scraper — Project Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0c1a24;
+      --slate: #1a2e3b;
+      --paper: #edf1f4;
+      --card: #fff;
+      --line: #d0d9e0;
+      --muted: #5a6d7a;
+      --amber: #d97706;
+      --teal: #0f766e;
+      --sky: #0369a1;
+      --shadow: 0 1px 0 rgba(12,26,36,.05), 0 10px 28px rgba(12,26,36,.06);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Sora", system-ui, sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, #e4eaef 0%, var(--paper) 35%, #e8eef2 100%);
+      min-height: 100vh;
+      line-height: 1.45;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 24px 16px 72px; }
+
+    /* —— Hero —— */
+    .hero {
+      background: linear-gradient(145deg, var(--ink), var(--slate) 75%, #243f50);
+      color: #f3f7fa;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+      border-left: 5px solid var(--amber);
+    }
+    .eyebrow {
+      font: 500 11px/1 "IBM Plex Mono", monospace;
+      letter-spacing: .12em; text-transform: uppercase;
+      color: #9fb4c3; margin: 0 0 8px;
+    }
+    h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 3vw, 1.95rem); letter-spacing: -.02em; }
+    .lede { margin: 0 0 14px; color: #d5e2ea; max-width: 58ch; font-size: .95rem; }
+    .meta {
+      display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 14px;
+    }
+    .meta a {
+      color: #fcd34d; font: 12px "IBM Plex Mono", monospace;
+      text-decoration: none; border-bottom: 1px solid rgba(252,211,77,.35);
+    }
+    .pill {
+      font: 11px "IBM Plex Mono", monospace;
+      padding: 4px 9px; border-radius: 999px;
+      background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); color: #cfe0ea;
+    }
+    .cards {
+      display: grid; gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+    .card {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 10px; padding: 10px 12px;
+    }
+    .card h3 {
+      margin: 0 0 6px; font: 500 10px/1 "IBM Plex Mono", monospace;
+      letter-spacing: .08em; text-transform: uppercase; color: #9fb4c3;
+    }
+    .card ul { margin: 0; padding-left: 1.05rem; color: #e7eef3; font-size: .86rem; }
+    .card li + li { margin-top: 3px; }
+    .card p { margin: 0; color: #e7eef3; font-size: .86rem; }
+
+    /* —— Phase jump nav —— */
+    .phase-nav {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin: 18px 0 10px;
+    }
+    .phase-nav a {
+      text-decoration: none;
+      font: 600 12px "IBM Plex Mono", monospace;
+      padding: 7px 11px; border-radius: 8px;
+      background: var(--card); border: 1px solid var(--line); color: var(--ink);
+      box-shadow: var(--shadow);
+    }
+    .phase-nav a:hover { border-color: var(--slate); }
+    .phase-nav a .pct { color: var(--muted); font-weight: 500; margin-left: 4px; }
+
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      justify-content: space-between; margin-bottom: 14px;
+    }
+    .stats { display: flex; flex-wrap: wrap; gap: 6px; }
+    .stat {
+      font: 12px "IBM Plex Mono", monospace;
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 999px; padding: 5px 10px; box-shadow: var(--shadow);
+    }
+    .controls { display: flex; flex-wrap: wrap; gap: 6px; }
+    button.ctrl {
+      border: 1px solid var(--line); background: var(--card);
+      border-radius: 8px; padding: 6px 10px; cursor: pointer;
+      font: 500 12px "Sora", sans-serif; color: var(--ink);
+    }
+    button.ctrl.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+    /* —— Tags / signatures —— */
+    .tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      font: 600 10px/1 "IBM Plex Mono", monospace;
+      letter-spacing: .04em; text-transform: uppercase;
+      padding: 4px 7px; border-radius: 999px; border: 1px solid transparent;
+    }
+    .tag::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+    .tag.completed { color: #065f46; background: #d1fae5; border-color: #a7f3d0; }
+    .tag.in-progress { color: #92400e; background: #fef3c7; border-color: #fde68a; }
+    .tag.partial { color: #9a3412; background: #ffedd5; border-color: #fed7aa; }
+    .tag.open { color: #334155; background: #e2e8f0; border-color: #cbd5e1; }
+    .tag.blocking { color: #991b1b; background: #fee2e2; border-color: #fecaca; }
+    .tag.testing { color: #1e40af; background: #dbeafe; border-color: #bfdbfe; }
+    .tag.test-failed { color: #9f1239; background: #ffe4e6; border-color: #fecdd3; }
+    .tag.issue { color: #6b21a8; background: #f3e8ff; border-color: #e9d5ff; }
+    .tag.deferred { color: #57534e; background: #f5f5f4; border-color: #e7e5e4; }
+
+    .sig {
+      display: inline-flex; align-items: center; gap: 3px;
+      font: 600 10px "IBM Plex Mono", monospace;
+      padding: 2px 6px; border-radius: 999px; border: 1px solid transparent;
+    }
+    .sig.cursor { color: #1d4ed8; background: #dbeafe; border-color: #bfdbfe; }
+    .sig.cursor::before { content: "⌁"; }
+    .sig.codex { color: #0f766e; background: #ccfbf1; border-color: #99f6e4; }
+    .sig.codex::before { content: "⌘"; }
+    .sig.claude { color: #c2410c; background: #ffedd5; border-color: #fed7aa; }
+    .sig.claude::before { content: "◈"; }
+
+    /* —— Phase blocks —— */
+    .phase {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      scroll-margin-top: 12px;
+    }
+    .phase-head {
+      display: grid;
+      grid-template-columns: 56px 1fr auto;
+      gap: 12px; align-items: center;
+      padding: 14px 16px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--line);
+    }
+    .phase-num {
+      width: 56px; height: 56px;
+      border-radius: 12px;
+      display: grid; place-items: center;
+      background: var(--ink); color: #fff;
+      font: 700 18px/1 "IBM Plex Mono", monospace;
+    }
+    .phase[data-phase-status="completed"] .phase-num { background: var(--teal); }
+    .phase[data-phase-status="partial"] .phase-num,
+    .phase[data-phase-status="in-progress"] .phase-num { background: var(--amber); color: #111; }
+    .phase[data-phase-status="blocking"] .phase-num { background: #b91c1c; }
+    .phase[data-phase-status="deferred"] .phase-num { background: #78716c; }
+    .phase-head h2 { margin: 0 0 4px; font-size: 1.1rem; }
+    .phase-head p { margin: 0; color: var(--muted); font-size: .84rem; }
+    .phase-progress {
+      margin-top: 8px; height: 6px; background: #e2e8f0; border-radius: 999px; overflow: hidden;
+      max-width: 220px;
+    }
+    .phase-progress > i {
+      display: block; height: 100%; background: var(--teal); width: 0%;
+      transition: width .25s ease;
+    }
+    .phase-count {
+      font: 12px "IBM Plex Mono", monospace; color: var(--muted); text-align: right;
+    }
+    .phase-tasks { padding: 6px 8px 10px; }
+
+    /* —— Tasks —— */
+    details.task {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin: 6px;
+      background: #fff;
+    }
+    details.task[hidden] { display: none !important; }
+    details.task > summary {
+      list-style: none; cursor: pointer;
+      display: grid;
+      grid-template-columns: 28px 72px 1fr auto;
+      gap: 10px; align-items: center;
+      padding: 11px 12px;
+    }
+    details.task > summary::-webkit-details-marker { display: none; }
+    .check {
+      width: 20px; height: 20px; border-radius: 6px;
+      border: 2px solid var(--line);
+      display: grid; place-items: center;
+      color: transparent; font-size: 12px; font-weight: 700;
+    }
+    details.task[data-status="completed"] .check {
+      background: var(--teal); border-color: var(--teal); color: #fff;
+    }
+    details.task[data-status="completed"] .check::after { content: "✓"; }
+    .task-n {
+      font: 600 12px "IBM Plex Mono", monospace;
+      color: var(--sky);
+    }
+    .task-name { font-weight: 600; font-size: .93rem; }
+    .task-ref {
+      display: block; margin-top: 2px;
+      font: 11px "IBM Plex Mono", monospace; color: var(--muted);
+    }
+    .task-body {
+      padding: 0 12px 12px 110px;
+      border-top: 1px dashed var(--line);
+      font-size: .86rem;
+    }
+    .task-body h4 {
+      margin: 12px 0 5px;
+      font: 500 10px/1 "IBM Plex Mono", monospace;
+      letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+    }
+    .task-body p { margin: 0; color: var(--slate); }
+    .task-body ul { margin: 0; padding-left: 1.1rem; }
+    .links a {
+      font: 12px "IBM Plex Mono", monospace;
+      color: var(--sky); margin-right: 10px;
+    }
+    .comments { list-style: none; padding: 0; margin: 0; }
+    .comments li {
+      background: #f4f7f9; border: 1px solid #e3ebf0;
+      border-radius: 8px; padding: 8px 10px; margin-top: 6px;
+    }
+    .comments .who {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      margin-bottom: 3px; font: 11px "IBM Plex Mono", monospace; color: var(--muted);
+    }
+    .comments p { margin: 0; }
+
+    .howto {
+      margin-top: 22px; border: 1px solid var(--line); border-radius: 12px;
+      background: #fff; padding: 14px 16px;
+    }
+    .howto h2 { margin: 0 0 8px; font-size: 1rem; }
+    .howto ol { margin: 0; padding-left: 1.2rem; font-size: .88rem; color: var(--slate); }
+    .howto li + li { margin-top: 5px; }
+    .howto code {
+      font: .82em/1.4 "IBM Plex Mono", monospace;
+      background: #eef3f6; padding: 1px 5px; border-radius: 4px;
+    }
+    footer {
+      margin-top: 16px; color: var(--muted);
+      font: 12px "IBM Plex Mono", monospace;
+    }
+
+    @media (max-width: 700px) {
+      .phase-head { grid-template-columns: 48px 1fr; }
+      .phase-count { grid-column: 2; text-align: left; }
+      details.task > summary {
+        grid-template-columns: 24px 56px 1fr;
+      }
+      details.task > summary .tags { grid-column: 2 / -1; }
+      .task-body { padding-left: 12px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .phase-progress > i { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <p class="eyebrow">IAAI Ontario · dealership inventory platform</p>
+      <h1>Project tracker</h1>
+      <p class="lede">
+        Crawl Ontario IAA/IAAI lots into our DB; serve only via our private API.
+        Website never hits ca.iaai.com. Fail-closed crawls, durable history,
+        pointer-only media with on-demand thumbs.
+      </p>
+      <div class="meta">
+        <span class="pill">Updated <strong id="board-updated">2026-07-16</strong></span>
+        <span class="pill">Current: Phase 0</span>
+        <a href="./handoffs/2026-07-16-phase0-handoff.md">Handoff</a>
+        <a href="./09-enterprise-hardening-plan.md">Plan 09</a>
+        <a href="./10-implementation-plan.md">Plan 10</a>
+        <a href="./project-tracker.md">How to update</a>
+        <a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/6">PR #6</a>
+        <a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/7">PR #7</a>
+      </div>
+      <div class="cards">
+        <div class="card">
+          <h3>Goals</h3>
+          <ul>
+            <li>Verified Ontario snapshot in SQLite</li>
+            <li>Append-only price + status history</li>
+            <li>Private API only (future BFF/UI)</li>
+            <li>Prod after legal, restore, gateway, canary</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Success criteria</h3>
+          <ul>
+            <li>Incomplete crawl never archives lots</li>
+            <li>UI never scrapes / long-term hotlinks IAAI</li>
+            <li>Crawl never downloads image binaries</li>
+            <li>Backup counts only after restore drill</li>
+            <li>Offline tests green every change</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Now</h3>
+          <p>Finish Phase 0 (signed media URLs, container crawl). Then Phase 2 P0 gates (scheduler, off-host backups).</p>
+        </div>
+      </div>
+    </header>
+
+    <nav class="phase-nav" id="phase-nav" aria-label="Phases"></nav>
+
+    <div class="toolbar">
+      <div class="stats" id="stats"></div>
+      <div class="controls">
+        <button type="button" class="ctrl active" data-filter="all">All</button>
+        <button type="button" class="ctrl" data-filter="openish">Open</button>
+        <button type="button" class="ctrl" data-filter="blocking">Blocking</button>
+        <button type="button" class="ctrl" data-filter="completed">Done</button>
+        <button type="button" class="ctrl" id="expand-all">Expand</button>
+        <button type="button" class="ctrl" id="collapse-all">Collapse</button>
+      </div>
+    </div>
+
+    <!-- ===================== PHASE 0 ===================== -->
+    <section class="phase" id="phase-0" data-phase-status="partial">
+      <div class="phase-head">
+        <div class="phase-num">0</div>
+        <div>
+          <h2>Phase 0 — Review fixes &amp; hot-path hardening</h2>
+          <p>Finish before new feature work. Doc 09 Phase 0 · Handoff Tasks A–C.</p>
+          <div class="phase-progress"><i data-bar></i></div>
+        </div>
+        <div class="phase-count" data-phase-count></div>
+      </div>
+      <div class="phase-tasks">
+
+        <details class="task" data-status="completed" data-id="0.1">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 1</span>
+            <span>
+              <span class="task-name">Schema / migrations once per DB path</span>
+              <span class="task-ref">plan 0.1 · storage + API lifespan</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p>Request path write-free; <code>_SCHEMA_READY</code> memo.</p>
+            <h4>PR / commits</h4>
+            <div class="links"><a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/7">PR #7</a><a href="https://github.com/tsyed-agent/IAAI-Scraper/commit/1c08f7c">1c08f7c</a></div>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig claude">Claude Code</span><span>2026-07-16</span></div>
+              <p>Landed in Phase 0 hardening.</p></li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="task" data-status="completed" data-id="0.2">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 2</span>
+            <span>
+              <span class="task-name">Refuse thumbnail redirects (SSRF)</span>
+              <span class="task-ref">plan 0.2 · images._RefuseRedirects</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+          <div class="task-body">
+            <div class="links"><a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/7">PR #7</a></div>
+          </div>
+        </details>
+
+        <details class="task" data-status="completed" data-id="0.3">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 3</span>
+            <span>
+              <span class="task-name">price_history currency + source_observed_at</span>
+              <span class="task-ref">plan 0.3 · provenance columns</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+          <div class="task-body"><div class="links"><a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/7">PR #7</a></div></div>
+        </details>
+
+        <details class="task" data-status="completed" data-id="0.4">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 4</span>
+            <span>
+              <span class="task-name">Lifecycle only in lot_status_history</span>
+              <span class="task-ref">plan 0.4 · no status_* in price_history</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+          <div class="task-body"><div class="links"><a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/7">PR #7</a></div></div>
+        </details>
+
+        <details class="task" data-status="completed" data-id="0.5">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 5</span>
+            <span>
+              <span class="task-name">Thumbnail cache hardening</span>
+              <span class="task-ref">plan 0.5 · single-flight, neg cache, stale, evict</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+          <div class="task-body"><div class="links"><a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/7">PR #7</a></div></div>
+        </details>
+
+        <details class="task" data-status="completed" data-id="0.6a">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 6</span>
+            <span>
+              <span class="task-name">Access-log api_key redaction</span>
+              <span class="task-ref">plan 0.6a · Handoff A · logging_utils</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p>uvicorn.access rewrites <code>api_key=…</code> → <code>REDACTED</code>; offline LogRecord test.</p>
+            <h4>PR / commits</h4>
+            <p><code>codex/phase0-access-log-redaction</code> — push/PR pending (gh auth expired)</p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
+              <p>Implemented; 127 tests green. Committed on branch; gh token invalid for push.</p></li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="task" data-status="open" data-id="0.6b">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 7</span>
+            <span>
+              <span class="task-name">Signed short-lived media URLs</span>
+              <span class="task-ref">plan 0.6b · Handoff C · auth HMAC</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span></span>
+          </summary>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p><code>thumbnail_href</code> gets <code>?expires=&amp;sig=</code>; header token still works; deprecate <code>?api_key=</code> after one release.</p>
+          </div>
+        </details>
+
+        <details class="task" data-status="completed" data-id="0.7">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 8</span>
+            <span>
+              <span class="task-name">Public /readyz for probes</span>
+              <span class="task-ref">plan 0.7 · IAAI_READYZ_PUBLIC</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+          <div class="task-body"><div class="links"><a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/7">PR #7</a></div></div>
+        </details>
+
+        <details class="task" data-status="completed" data-id="0.8">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 9</span>
+            <span>
+              <span class="task-name">sold_from / sold_to require concluded status</span>
+              <span class="task-ref">plan 0.8 · query filters</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+          <div class="task-body"><div class="links"><a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/7">PR #7</a></div></div>
+        </details>
+
+        <details class="task" data-status="completed" data-id="0.9">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 10</span>
+            <span>
+              <span class="task-name">canada-wide page-size default = 100</span>
+              <span class="task-ref">plan 0.9 · CLI + API</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+          <div class="task-body"><div class="links"><a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/7">PR #7</a></div></div>
+        </details>
+
+        <details class="task" data-status="completed" data-id="0.10">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 11</span>
+            <span>
+              <span class="task-name">Normalize StockNum in duplicate-page guard</span>
+              <span class="task-ref">plan 0.10 · crawler</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+          <div class="task-body"><div class="links"><a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/7">PR #7</a></div></div>
+        </details>
+
+        <details class="task" data-status="partial" data-id="0.11">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 12</span>
+            <span>
+              <span class="task-name">Verify in-container crawl</span>
+              <span class="task-ref">plan 0.11 · Handoff B · docker compose</span>
+            </span>
+            <span class="tags"><span class="tag partial">partial</span> <span class="tag blocking">blocking</span></span>
+          </summary>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p><code>/dev/shm</code> tmpfs landed. Live <code>POST /commands/crawl</code> inside container still needs authorized run.</p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig claude">Claude Code</span><span>2026-07-16</span></div>
+              <p>Compose tmpfs added; manual verify open.</p></li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="task" data-status="deferred" data-id="0.12">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 13</span>
+            <span>
+              <span class="task-name">Minimal UPDATE on unchanged lots</span>
+              <span class="task-ref">plan 0.12 · defer until multi-source scale</span>
+            </span>
+            <span class="tags"><span class="tag deferred">deferred</span></span>
+          </summary>
+          <div class="task-body"><p>Skip unless measured need.</p></div>
+        </details>
+
+      </div>
+    </section>
+
+    <!-- ===================== PHASE 1 ===================== -->
+    <section class="phase" id="phase-1" data-phase-status="completed">
+      <div class="phase-head">
+        <div class="phase-num">1</div>
+        <div>
+          <h2>Phase 1 — Media API</h2>
+          <p>Pointers + on-demand thumbnail cache. Doc 10 Phase 1 · shipped in PR #6.</p>
+          <div class="phase-progress"><i data-bar></i></div>
+        </div>
+        <div class="phase-count" data-phase-count></div>
+      </div>
+      <div class="phase-tasks">
+
+        <details class="task" data-status="completed" data-id="1.0">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 1</span>
+            <span>
+              <span class="task-name">Spec alignment (media plan)</span>
+              <span class="task-ref">doc 10 Phase 0</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="completed" data-id="1.1">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 2</span>
+            <span>
+              <span class="task-name">Config + .env.example</span>
+              <span class="task-ref">doc 10 · 1.1</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="completed" data-id="1.2">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 3</span>
+            <span>
+              <span class="task-name">ThumbnailCache module + unit tests</span>
+              <span class="task-ref">doc 10 · 1.2</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="completed" data-id="1.3">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 4</span>
+            <span>
+              <span class="task-name">GET /lots/{stock}/thumbnail route</span>
+              <span class="task-ref">doc 10 · 1.3</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="completed" data-id="1.4">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 5</span>
+            <span>
+              <span class="task-name">Auth: read token + ?api_key= for &lt;img&gt;</span>
+              <span class="task-ref">doc 10 · 1.4</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="completed" data-id="1.5">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 6</span>
+            <span>
+              <span class="task-name">thumbnail_href on list/detail hydrate</span>
+              <span class="task-ref">doc 10 · 1.5</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="completed" data-id="1.6">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 7</span>
+            <span>
+              <span class="task-name">README / data-model notes</span>
+              <span class="task-ref">doc 10 · 1.6</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="completed" data-id="1.7">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 8</span>
+            <span>
+              <span class="task-name">Docker image_cache volume path</span>
+              <span class="task-ref">doc 10 · 1.7 · /data/image_cache</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+          <div class="task-body">
+            <div class="links">
+              <a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/6">PR #6</a>
+              <a href="https://github.com/tsyed-agent/IAAI-Scraper/commit/dcd5009">dcd5009</a>
+            </div>
+            <ul class="comments">
+              <li><div class="who"><span class="sig codex">Codex</span><span>2026-07-16</span></div>
+              <p>Media API landed with enterprise hardening.</p></li>
+            </ul>
+          </div>
+        </details>
+
+      </div>
+    </section>
+
+    <!-- ===================== PHASE 2 ===================== -->
+    <section class="phase" id="phase-2" data-phase-status="blocking">
+      <div class="phase-head">
+        <div class="phase-num">2</div>
+        <div>
+          <h2>Phase 2 — Production P0 gates</h2>
+          <p>Block public traffic until these pass. Doc 10 Phase 2 · Doc 09 P0 · Handoff D–E.</p>
+          <div class="phase-progress"><i data-bar></i></div>
+        </div>
+        <div class="phase-count" data-phase-count></div>
+      </div>
+      <div class="phase-tasks">
+
+        <details class="task" data-status="open" data-id="2.1">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 1</span>
+            <span>
+              <span class="task-name">Legal / authorization + image display policy</span>
+              <span class="task-ref">doc 10 · 2.1 · non-code</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span> <span class="tag blocking">blocking</span></span>
+          </summary>
+          <div class="task-body"><p>Signed terms; written thumb-cache / display rules.</p></div>
+        </details>
+
+        <details class="task" data-status="open" data-id="2.2">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 2</span>
+            <span>
+              <span class="task-name">Off-host backups + restore drill</span>
+              <span class="task-ref">doc 10 · 2.2 · Handoff E</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span> <span class="tag blocking">blocking</span></span>
+          </summary>
+          <div class="task-body">
+            <p>Upload snapshot + raw to versioned object storage; SHA-256 manifest; restore integrity + lot-count floor.</p>
+          </div>
+        </details>
+
+        <details class="task" data-status="open" data-id="2.3">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 3</span>
+            <span>
+              <span class="task-name">TLS gateway, rate/body limits, secrets, audit logs</span>
+              <span class="task-ref">doc 10 · 2.3 · edge / proxy</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span> <span class="tag blocking">blocking</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="open" data-id="2.4">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 4</span>
+            <span>
+              <span class="task-name">Scheduler + whole-run retry (durable worker start)</span>
+              <span class="task-ref">doc 10 · 2.4 · Handoff D</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span> <span class="tag blocking">blocking</span></span>
+          </summary>
+          <div class="task-body">
+            <p><code>docs/ops-scheduling.md</code> + <code>scripts/scheduled_crawl.sh</code>; one retry after 20m; cron → CLI, not API job.</p>
+          </div>
+        </details>
+
+        <details class="task" data-status="open" data-id="2.5">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 5</span>
+            <span>
+              <span class="task-name">Authorized 3-run live canary</span>
+              <span class="task-ref">doc 10 · 2.5 · data QA</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span> <span class="tag blocking">blocking</span></span>
+          </summary>
+          <div class="task-body"><p>Exact totals/branches/prices vs source; never against prod DB.</p></div>
+        </details>
+
+        <details class="task" data-status="open" data-id="2.6">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 6</span>
+            <span>
+              <span class="task-name">Raw baseline backfill from surviving archives</span>
+              <span class="task-ref">doc 09 Phase B remainder</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="open" data-id="2.7">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 7</span>
+            <span>
+              <span class="task-name">Versioned API response schemas + deprecation policy</span>
+              <span class="task-ref">doc 09 Phase C remainder</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span></span>
+          </summary>
+        </details>
+
+      </div>
+    </section>
+
+    <!-- ===================== PHASE 3 ===================== -->
+    <section class="phase" id="phase-3" data-phase-status="open">
+      <div class="phase-head">
+        <div class="phase-num">3</div>
+        <div>
+          <h2>Phase 3 — Website BFF / UI</h2>
+          <p>UI talks only to our API. After Phase 0 media auth + Phase 1.</p>
+          <div class="phase-progress"><i data-bar></i></div>
+        </div>
+        <div class="phase-count" data-phase-count></div>
+      </div>
+      <div class="phase-tasks">
+
+        <details class="task" data-status="open" data-id="3.1">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 1</span>
+            <span>
+              <span class="task-name">List: metadata first, lazy viewport thumbs</span>
+              <span class="task-ref">doc 10 · 3.1</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="open" data-id="3.2">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 2</span>
+            <span>
+              <span class="task-name">Detail page media (no browser scrape)</span>
+              <span class="task-ref">doc 10 · 3.2</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="open" data-id="3.3">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 3</span>
+            <span>
+              <span class="task-name">Optional CDN / cache headers on thumbs</span>
+              <span class="task-ref">doc 10 · 3.3</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="open" data-id="3.4">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 4</span>
+            <span>
+              <span class="task-name">Optional: post-crawl warmer for first-page thumbs</span>
+              <span class="task-ref">doc 10 Phase 1.5 optional</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span></span>
+          </summary>
+        </details>
+
+      </div>
+    </section>
+
+    <!-- ===================== PHASE 4 ===================== -->
+    <section class="phase" id="phase-4" data-phase-status="deferred">
+      <div class="phase-head">
+        <div class="phase-num">4</div>
+        <div>
+          <h2>Phase 4 — Multi-source / PostgreSQL</h2>
+          <p>After Phase 2 P0. Doc 09 Phase D · Doc 10 Phase 4.</p>
+          <div class="phase-progress"><i data-bar></i></div>
+        </div>
+        <div class="phase-count" data-phase-count></div>
+      </div>
+      <div class="phase-tasks">
+
+        <details class="task" data-status="deferred" data-id="4.1">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 1</span>
+            <span>
+              <span class="task-name">Source registry + (source, external_lot_id)</span>
+              <span class="task-ref">doc 09 D</span>
+            </span>
+            <span class="tags"><span class="tag deferred">deferred</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="deferred" data-id="4.2">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 2</span>
+            <span>
+              <span class="task-name">Postgres schema, migrations, IAA backfill</span>
+              <span class="task-ref">doc 09 D</span>
+            </span>
+            <span class="tags"><span class="tag deferred">deferred</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="deferred" data-id="4.3">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 3</span>
+            <span>
+              <span class="task-name">Adapter SDK + second marketplace</span>
+              <span class="task-ref">doc 09 D / P1</span>
+            </span>
+            <span class="tags"><span class="tag deferred">deferred</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="deferred" data-id="4.4">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 4</span>
+            <span>
+              <span class="task-name">Entity resolution + search</span>
+              <span class="task-ref">doc 09 D · PG FTS/trigram first</span>
+            </span>
+            <span class="tags"><span class="tag deferred">deferred</span></span>
+          </summary>
+        </details>
+
+      </div>
+    </section>
+
+    <!-- ===================== PHASE 5 ===================== -->
+    <section class="phase" id="phase-5" data-phase-status="open">
+      <div class="phase-head">
+        <div class="phase-num">5</div>
+        <div>
+          <h2>Phase 5 — Operations &amp; scale</h2>
+          <p>After durable worker exists. Doc 09 Phase E · Handoff F.</p>
+          <div class="phase-progress"><i data-bar></i></div>
+        </div>
+        <div class="phase-count" data-phase-count></div>
+      </div>
+      <div class="phase-tasks">
+
+        <details class="task" data-status="open" data-id="5.1">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 1</span>
+            <span>
+              <span class="task-name">Queue workers (not API-process jobs)</span>
+              <span class="task-ref">doc 09 E</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="deferred" data-id="5.2">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 2</span>
+            <span>
+              <span class="task-name">Adaptive sale-window scheduling</span>
+              <span class="task-ref">Handoff F · 15–30m when closing</span>
+            </span>
+            <span class="tags"><span class="tag deferred">deferred</span></span>
+          </summary>
+          <div class="task-body"><p>Design in scheduler layer after Phase 2 Task 4.</p></div>
+        </details>
+
+        <details class="task" data-status="open" data-id="5.3">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 3</span>
+            <span>
+              <span class="task-name">Metrics, dashboards, paging alerts</span>
+              <span class="task-ref">doc 09 E</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="open" data-id="5.4">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 4</span>
+            <span>
+              <span class="task-name">Deploy health, rollback, PITR, secrets rotation</span>
+              <span class="task-ref">doc 09 E</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span></span>
+          </summary>
+        </details>
+
+        <details class="task" data-status="open" data-id="5.5">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 5</span>
+            <span>
+              <span class="task-name">Periodic schema-drift / null-rate / archive audits</span>
+              <span class="task-ref">doc 09 E</span>
+            </span>
+            <span class="tags"><span class="tag open">open</span></span>
+          </summary>
+        </details>
+
+      </div>
+    </section>
+
+    <section class="howto" id="agent-howto">
+      <h2>Agent update instructions</h2>
+      <ol>
+        <li>Edit <strong>only the task you touched</strong> under its Phase in this file.</li>
+        <li>Set <code>data-status</code> + the visible tag: completed · in-progress · partial · open · blocking · testing · test-failed · issue · deferred.</li>
+        <li>Add <strong>one</strong> ≤2-line comment with
+          <code>&lt;span class="sig cursor"&gt;Cursor&lt;/span&gt;</code>,
+          <code>codex</code>, or <code>claude</code>.</li>
+        <li>Link PR/commit on that task; bump <code>data-updated</code> on <code>&lt;html&gt;</code>.</li>
+        <li>Do not restructure phases or paste logs. Plans stay in docs 09/10/handoff.</li>
+      </ol>
+    </section>
+
+    <footer>Phases 0→5 · one task list each · open in a browser · no build step</footer>
+  </div>
+
+  <script>
+    (function () {
+      const phases = [...document.querySelectorAll("section.phase")];
+      const nav = document.getElementById("phase-nav");
+      const statsEl = document.getElementById("stats");
+      const updated = document.documentElement.getAttribute("data-updated");
+      if (updated) document.getElementById("board-updated").textContent = updated;
+
+      function tasksIn(phase) {
+        return [...phase.querySelectorAll("details.task")];
+      }
+
+      function refreshPhase(phase) {
+        const tasks = tasksIn(phase);
+        const done = tasks.filter(t => t.dataset.status === "completed").length;
+        const total = tasks.length;
+        const pct = total ? Math.round((done / total) * 100) : 0;
+        const bar = phase.querySelector("[data-bar]");
+        const count = phase.querySelector("[data-phase-count]");
+        if (bar) bar.style.width = pct + "%";
+        if (count) count.innerHTML = `<strong>${done}/${total}</strong><br>done`;
+        return { done, total, pct, title: phase.querySelector("h2")?.textContent || phase.id };
+      }
+
+      function refreshAll() {
+        const summary = { completed: 0, open: 0, blocking: 0, testing: 0, partial: 0, deferred: 0, other: 0 };
+        let total = 0;
+        nav.innerHTML = "";
+        for (const phase of phases) {
+          const { done, total: t, pct } = refreshPhase(phase);
+          total += t;
+          const n = phase.id.replace("phase-", "");
+          const a = document.createElement("a");
+          a.href = "#" + phase.id;
+          a.innerHTML = `Phase ${n}<span class="pct">${pct}%</span>`;
+          nav.appendChild(a);
+          for (const task of tasksIn(phase)) {
+            const s = task.dataset.status || "open";
+            if (summary[s] != null) summary[s]++; else summary.other++;
+          }
+        }
+        statsEl.innerHTML =
+          `<span class="stat"><b>${total}</b> tasks</span>` +
+          Object.entries(summary)
+            .filter(([, v]) => v)
+            .map(([k, v]) => `<span class="stat"><b>${v}</b> ${k}</span>`)
+            .join("");
+      }
+
+      function applyFilter(mode) {
+        for (const task of document.querySelectorAll("details.task")) {
+          const s = task.dataset.status || "open";
+          let show = true;
+          if (mode === "completed") show = s === "completed";
+          else if (mode === "blocking") show = s === "blocking" || !!task.querySelector(".tag.blocking");
+          else if (mode === "openish") show = !["completed", "deferred"].includes(s);
+          task.hidden = !show;
+        }
+        document.querySelectorAll("button.ctrl[data-filter]").forEach(b => {
+          b.classList.toggle("active", b.dataset.filter === mode);
+        });
+      }
+
+      document.querySelectorAll("button.ctrl[data-filter]").forEach(btn => {
+        btn.addEventListener("click", () => applyFilter(btn.dataset.filter));
+      });
+      document.getElementById("expand-all").addEventListener("click", () => {
+        document.querySelectorAll("details.task").forEach(d => { d.open = true; });
+      });
+      document.getElementById("collapse-all").addEventListener("click", () => {
+        document.querySelectorAll("details.task").forEach(d => { d.open = false; });
+      });
+
+      applyFilter("all");
+      refreshAll();
+    })();
+  </script>
+</body>
+</html>
