@@ -302,6 +302,24 @@ def _artifact(kind: str, path: Path, object_key: str) -> Artifact:
 # --------------------------------------------------------------------------- #
 
 
+def _safe_artifact_name(name: str) -> str:
+    """Reject path traversal / absolute names from manifests."""
+    if not name or name != Path(name).name:
+        raise ValueError(f"unsafe artifact name: {name!r}")
+    if name in (".", ".."):
+        raise ValueError(f"unsafe artifact name: {name!r}")
+    return name
+
+
+def _safe_object_key(key: str, *, allowed_prefix: str) -> str:
+    key = key.lstrip("/")
+    if ".." in Path(key).parts:
+        raise ValueError(f"unsafe object key: {key!r}")
+    if not key.startswith(allowed_prefix.rstrip("/") + "/"):
+        raise ValueError(f"object key outside snapshot prefix: {key!r}")
+    return key
+
+
 def run_offsite_backup(
     data_dir: Path,
     store: ObjectStore,
@@ -319,17 +337,18 @@ def run_offsite_backup(
     rdir = raw_dir(data_dir)
     bdir.mkdir(parents=True, exist_ok=True)
 
+    db_backup: Optional[Path] = None
     if create_fresh_snapshot:
         if not db_path.is_file():
             raise FileNotFoundError(f"SQLite database not found: {db_path}")
         stamp = snapshot_id or _utc_stamp()
         dest = bdir / f"iaai-ontario-{stamp}.db"
-        backup_sqlite(db_path, dest)
+        db_backup = backup_sqlite(db_path, dest)
         snapshot_id = stamp
     else:
         snapshot_id = snapshot_id or _utc_stamp()
+        db_backup = latest_db_backup(bdir)
 
-    db_backup = latest_db_backup(bdir)
     if db_backup is None:
         raise FileNotFoundError(f"no local DB backups under {bdir}")
 
@@ -339,7 +358,8 @@ def run_offsite_backup(
         _artifact("db", db_backup, f"{base}/iaai-ontario.db"),
     ]
     if raw_file is not None:
-        artifacts.append(_artifact("raw", raw_file, f"{base}/{raw_file.name}"))
+        safe_raw_name = _safe_artifact_name(raw_file.name)
+        artifacts.append(_artifact("raw", raw_file, f"{base}/{safe_raw_name}"))
 
     for art in artifacts:
         store.put(art.object_key, art.local_path)
@@ -456,10 +476,13 @@ def run_restore_drill(
     verified: dict[str, bool] = {}
     db_local: Optional[Path] = None
     for art in artifacts:
-        name = art["name"]
-        key = art["object_key"]
+        name = _safe_artifact_name(str(art["name"]))
+        key = _safe_object_key(str(art["object_key"]), allowed_prefix=base)
         expected = art["sha256"]
         dest = restore_dir / name
+        # Ensure resolved path stays under restore_dir even on exotic platforms.
+        if not dest.resolve().is_relative_to(restore_dir.resolve()):
+            raise ValueError(f"artifact path escapes restore dir: {name!r}")
         store.get(key, dest)
         actual = sha256_file(dest)
         verified[name] = actual == expected

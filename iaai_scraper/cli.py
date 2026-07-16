@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +40,16 @@ def _setup_logging(verbose: bool) -> None:
         level=logging.DEBUG if verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+
+
+def _env_int_opt(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise typer.BadParameter(f"invalid {name}={raw!r}; expected an integer") from exc
 
 
 @app.command()
@@ -116,17 +127,17 @@ def offsite_backup(
         "--backup-dir",
         help="filesystem object-store root (IAAI_BACKUP_DIR)",
     ),
-    keep_local_db: int = typer.Option(
-        DEFAULT_KEEP_LOCAL_DB,
+    keep_local_db: Optional[int] = typer.Option(
+        None,
         "--keep-local-db",
         min=0,
-        help="local DB backups to retain after upload",
+        help="local DB backups to retain (default: IAAI_BACKUP_KEEP_LOCAL_DB or 5)",
     ),
-    raw_hot_days: int = typer.Option(
-        DEFAULT_RAW_HOT_DAYS,
+    raw_hot_days: Optional[int] = typer.Option(
+        None,
         "--raw-hot-days",
         min=0,
-        help="local raw JSONL hot window (days)",
+        help="local raw hot window days (default: IAAI_BACKUP_RAW_HOT_DAYS or 90)",
     ),
     skip_fresh_snapshot: bool = typer.Option(
         False,
@@ -141,8 +152,16 @@ def offsite_backup(
         store,
         db_path=config.DB_PATH,
         create_fresh_snapshot=not skip_fresh_snapshot,
-        keep_local_db=keep_local_db,
-        raw_hot_days=raw_hot_days,
+        keep_local_db=(
+            keep_local_db
+            if keep_local_db is not None
+            else _env_int_opt("IAAI_BACKUP_KEEP_LOCAL_DB", DEFAULT_KEEP_LOCAL_DB)
+        ),
+        raw_hot_days=(
+            raw_hot_days
+            if raw_hot_days is not None
+            else _env_int_opt("IAAI_BACKUP_RAW_HOT_DAYS", DEFAULT_RAW_HOT_DAYS)
+        ),
     )
     typer.echo(json.dumps(report, indent=2, default=str))
 
@@ -159,11 +178,11 @@ def restore_drill(
         "--backup-dir",
         help="filesystem object-store root (IAAI_BACKUP_DIR)",
     ),
-    min_lots: int = typer.Option(
-        1,
+    min_lots: Optional[int] = typer.Option(
+        None,
         "--min-lots",
         min=0,
-        help="fail if restored lot count is below this floor",
+        help="lot-count floor (default: IAAI_BACKUP_MIN_LOTS or 1)",
     ),
     snapshot_id: Optional[str] = typer.Option(
         None,
@@ -182,7 +201,11 @@ def restore_drill(
     result = run_restore_drill(
         store,
         dest,
-        min_lots=min_lots,
+        min_lots=(
+            min_lots
+            if min_lots is not None
+            else _env_int_opt("IAAI_BACKUP_MIN_LOTS", 1)
+        ),
         snapshot_id=snapshot_id,
     )
     typer.echo(json.dumps(result.as_dict(), indent=2, default=str))

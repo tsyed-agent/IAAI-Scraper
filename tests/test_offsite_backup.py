@@ -186,6 +186,67 @@ def test_cli_offsite_and_restore(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert payload["lot_count"] == 3
 
 
+def test_restore_rejects_path_traversal_name(tmp_path: Path):
+    data = tmp_path / "data"
+    data.mkdir()
+    db = data / "iaai_ontario.db"
+    _seed_db(db, n=1)
+    store = FilesystemObjectStore(tmp_path / "offsite")
+    run_offsite_backup(data, store, db_path=db, snapshot_id="20260716T140000Z")
+
+    # Tamper the uploaded manifest to point at a traversal name.
+    manifest_key = "snapshots/20260716T140000Z/manifest.json"
+    local = tmp_path / "offsite" / manifest_key
+    manifest = json.loads(local.read_text(encoding="utf-8"))
+    manifest["artifacts"][0]["name"] = "../escape.db"
+    local.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unsafe artifact name"):
+        run_restore_drill(store, tmp_path / "restore", min_lots=1)
+
+
+def test_cli_reads_backup_env_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    data = tmp_path / "data"
+    data.mkdir()
+    db = data / "iaai_ontario.db"
+    _seed_db(db, n=2)
+    offsite = tmp_path / "offsite"
+
+    from typer.testing import CliRunner
+
+    from iaai_scraper.cli import app
+    import iaai_scraper.cli as cli_mod
+    import iaai_scraper.config as cfg
+
+    monkeypatch.setattr(cfg, "DATA_DIR", data)
+    monkeypatch.setattr(cfg, "DB_PATH", db)
+    monkeypatch.setattr(cli_mod.config, "DATA_DIR", data)
+    monkeypatch.setattr(cli_mod.config, "DB_PATH", db)
+    monkeypatch.setenv("IAAI_BACKUP_MIN_LOTS", "2")
+    monkeypatch.setenv("IAAI_BACKUP_KEEP_LOCAL_DB", "3")
+    monkeypatch.setenv("IAAI_BACKUP_RAW_HOT_DAYS", "30")
+
+    runner = CliRunner()
+    r1 = runner.invoke(
+        app,
+        ["offsite-backup", "--backend", "filesystem", "--backup-dir", str(offsite)],
+    )
+    assert r1.exit_code == 0, r1.output
+    r2 = runner.invoke(
+        app,
+        [
+            "restore-drill",
+            "--backend", "filesystem",
+            "--backup-dir", str(offsite),
+            "--restore-dir", str(tmp_path / "restore"),
+        ],
+    )
+    assert r2.exit_code == 0, r2.output
+    payload = json.loads(r2.output)
+    assert payload["min_lots"] == 2
+    assert payload["ok"] is True
+
+
 def test_shell_wrapper_runs_offline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     data = tmp_path / "data"
     data.mkdir()
