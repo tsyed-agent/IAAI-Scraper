@@ -20,6 +20,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -33,6 +34,7 @@ from .auth import (
     require_api_auth,
     require_api_auth_flexible,
     require_command_auth,
+    require_readyz_auth,
     validate_startup_auth,
 )
 from .images import (
@@ -44,10 +46,32 @@ from .images import (
 from .storage import SqliteStore
 from .sync_manager import sync_manager
 
+log = logging.getLogger("iaai.api")
+
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     validate_startup_auth()
+    # Ensure DDL/migrations run once here; request-path connections then skip
+    # schema work entirely and stay write-free.
+    store = SqliteStore(db_path=config.DB_PATH)
+    try:
+        removed = [
+            r[0] for r in store.conn.execute(
+                "SELECT stock_number FROM lots WHERE status = 'removed'"
+            ).fetchall()
+        ]
+    finally:
+        store.close()
+    if config.IMAGE_CACHE_ENABLED:
+        try:
+            evicted = ThumbnailCache().sweep(
+                ttl_s=config.IMAGE_CACHE_TTL_S or None, evict_stocks=removed,
+            )
+            if evicted:
+                log.info("thumbnail cache sweep evicted %d entries", evicted)
+        except Exception:  # noqa: BLE001 - cache hygiene must not block startup
+            log.exception("thumbnail cache sweep failed")
     yield
 
 
@@ -90,12 +114,16 @@ def _hydrate(row: dict[str, Any], *, include_raw: bool = False) -> dict[str, Any
 
 class CrawlCommand(BaseModel):
     max_list_pages: int = Field(default=config.MAX_LIST_PAGES, ge=1)
-    page_size: int = Field(
-        default=config.ONTARIO_PAGE_SIZE if config.ONTARIO_AT_SOURCE else config.PAGE_SIZE,
-        ge=1, le=1000,
-    )
+    # Default depends on canada_wide (1000 Ontario-at-source, 100 legacy), so
+    # it is resolved in the endpoint rather than fixed here.
+    page_size: Optional[int] = Field(default=None, ge=1, le=1000)
     canada_wide: bool = False
     enrich: bool = False
+
+    def resolved_page_size(self) -> int:
+        if self.page_size is not None:
+            return self.page_size
+        return config.PAGE_SIZE if self.canada_wide else config.ONTARIO_PAGE_SIZE
 
 
 def _lot_filters(**kwargs: Any) -> dict[str, Any]:
@@ -153,7 +181,7 @@ def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/readyz", dependencies=[Depends(require_api_auth)])
+@app.get("/readyz", dependencies=[Depends(require_readyz_auth)])
 def readyz(response: Response) -> dict[str, Any]:
     store = _store()
     try:
@@ -258,7 +286,7 @@ async def command_crawl(body: CrawlCommand = CrawlCommand()) -> dict[str, Any]:
         raise HTTPException(status_code=409, detail="crawl already running")
     ontario_at_source = not body.canada_wide
     settings = config.CrawlSettings(
-        page_size=body.page_size,
+        page_size=body.resolved_page_size(),
         max_list_pages=body.max_list_pages,
         enrich_details=body.enrich,
         ontario_at_source=ontario_at_source,

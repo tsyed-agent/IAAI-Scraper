@@ -124,6 +124,16 @@ def test_thumbnail_accepts_api_key_query(authed_client, monkeypatch):
     assert r.headers["x-image-cache"] == "MISS"
 
 
+def test_readyz_public_env_allows_unauthenticated_probe(monkeypatch, tmp_path):
+    client = _make_client(monkeypatch, tmp_path)
+    assert client.get("/readyz").status_code == 401
+    monkeypatch.setenv("IAAI_READYZ_PUBLIC", "true")
+    response = client.get("/readyz")
+    # Auth no longer blocks the probe; status reflects data readiness only.
+    assert response.status_code in (200, 503)
+    assert "reason" in response.json() or response.json().get("status") == "ready"
+
+
 def test_startup_fails_when_auth_required_without_token(monkeypatch, tmp_path):
     monkeypatch.setenv("IAAI_API_TOKEN", "")
     monkeypatch.setenv("IAAI_REQUIRE_AUTH", "true")

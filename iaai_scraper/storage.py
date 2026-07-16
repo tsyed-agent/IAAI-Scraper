@@ -361,6 +361,8 @@ CREATE TABLE IF NOT EXISTS price_history (
     observed_at   TEXT NOT NULL,
     price_type    TEXT NOT NULL,
     amount        REAL,
+    currency      TEXT,
+    source_observed_at TEXT,
     run_id        INTEGER,
     UNIQUE(stock_number, observed_at, price_type),
     FOREIGN KEY (run_id) REFERENCES crawl_runs(id)
@@ -492,7 +494,16 @@ _MIGRATIONS = {
         "archived": "INTEGER",
         "run_type": "TEXT DEFAULT 'full'",
     },
+    "price_history": {
+        "currency": "TEXT",
+        "source_observed_at": "TEXT",
+    },
 }
+
+# Paths whose schema/migrations have been ensured in this process. Keeping the
+# memo at module level makes API request-path connections write-free: only the
+# first connection per database path runs DDL/migrations.
+_SCHEMA_READY: set[str] = set()
 
 
 def _to_db_value(v: Any) -> Any:
@@ -549,29 +560,35 @@ def _apply_lifecycle_preservation(
 
 
 class SqliteStore:
-    def __init__(self, db_path: Path = config.DB_PATH):
+    def __init__(self, db_path: Path = config.DB_PATH,
+                 ensure_schema: Optional[bool] = None):
         db_path = Path(db_path)
         had_database = db_path.is_file() and db_path.stat().st_size > 0
         db_path.parent.mkdir(parents=True, exist_ok=True)
+        schema_key = str(db_path.resolve())
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         # Enforce relationships for newly-created history rows. This must be
         # enabled before any schema-changing statement.
         self.conn.execute("PRAGMA foreign_keys=ON;")
         self.conn.execute("PRAGMA busy_timeout=5000;")
-        if had_database and self._requires_migration():
-            stamp = _now().strftime("%Y%m%dT%H%M%S%fZ")
-            backup_path = db_path.parent / "backups" / f"{db_path.stem}-pre-migration-{stamp}.db"
-            backup_sqlite(self.conn, backup_path)
-            log.warning("Created pre-migration backup: %s", backup_path)
-        # WAL improves concurrent read (API) + write (crawler) behaviour. Set
-        # it after any required snapshot so the backup precedes persistent DB
-        # configuration/schema changes.
-        self.conn.execute("PRAGMA journal_mode=WAL;")
-        self.conn.executescript(_DDL)
-        self._migrate()
-        self.conn.executescript(_INDEX_DDL)
-        self.conn.commit()
+        if ensure_schema is None:
+            ensure_schema = schema_key not in _SCHEMA_READY
+        if ensure_schema:
+            if had_database and self._requires_migration():
+                stamp = _now().strftime("%Y%m%dT%H%M%S%fZ")
+                backup_path = db_path.parent / "backups" / f"{db_path.stem}-pre-migration-{stamp}.db"
+                backup_sqlite(self.conn, backup_path)
+                log.warning("Created pre-migration backup: %s", backup_path)
+            # WAL improves concurrent read (API) + write (crawler) behaviour. Set
+            # it after any required snapshot so the backup precedes persistent DB
+            # configuration/schema changes.
+            self.conn.execute("PRAGMA journal_mode=WAL;")
+            self.conn.executescript(_DDL)
+            self._migrate()
+            self.conn.executescript(_INDEX_DDL)
+            self.conn.commit()
+            _SCHEMA_READY.add(schema_key)
         self._current_run_id: Optional[int] = None
 
     def _requires_migration(self) -> bool:
@@ -720,13 +737,16 @@ class SqliteStore:
             try:
                 self.conn.execute(
                     "INSERT INTO price_history "
-                    "(stock_number, observed_at, price_type, amount, run_id) "
-                    "VALUES (?, ?, ?, ?, ?)",
+                    "(stock_number, observed_at, price_type, amount, currency, "
+                    "source_observed_at, run_id) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         data["stock_number"],
                         ts,
                         price_type,
                         _normalize_price(new_val),
+                        data.get("currency"),
+                        _to_db_value(data.get("server_observed_at")),
                         self._current_run_id,
                     ),
                 )
@@ -745,13 +765,17 @@ class SqliteStore:
         data: dict[str, Any],
         now: datetime,
     ) -> None:
-        """Append a lifecycle transition to normalized and legacy history."""
+        """Append a lifecycle transition to ``lot_status_history``.
+
+        Legacy databases also carried ``status_*`` rows in ``price_history``;
+        those are migrated once in ``_migrate`` and no longer written — the
+        price table holds prices only.
+        """
         new_status = data.get("status")
         old_status = existing.get("status") if existing else None
         if existing is not None and new_status == old_status:
             return
         ts = now.isoformat()
-        old_status = existing.get("status") if existing else None
         try:
             self.conn.execute(
                 "INSERT INTO lot_status_history "
@@ -766,25 +790,6 @@ class SqliteStore:
             log.debug(
                 "status history duplicate skipped stock=%s status=%s",
                 data["stock_number"], new_status,
-            )
-        try:
-            self.conn.execute(
-                "INSERT INTO price_history "
-                "(stock_number, observed_at, price_type, amount, run_id) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (
-                    data["stock_number"],
-                    ts,
-                    f"status_{new_status}",
-                    _normalize_price(data.get("final_price")),
-                    self._current_run_id,
-                ),
-            )
-        except sqlite3.IntegrityError:
-            log.debug(
-                "status history duplicate skipped stock=%s status=%s",
-                data["stock_number"],
-                new_status,
             )
 
     def archive_missing(
@@ -982,6 +987,11 @@ class SqliteStore:
             clauses.append("auction_date >= ?"); params.append(filters["auction_date_from"])
         if filters.get("auction_date_to"):
             clauses.append("auction_date <= ?"); params.append(filters["auction_date_to"])
+        # sold_from/sold_to bound the *concluded* archive: they constrain the
+        # status-change timestamp AND require a concluded outcome, so an
+        # active lot whose status merely flapped never matches.
+        if filters.get("sold_from") or filters.get("sold_to"):
+            clauses.append("status IN ('sold', 'if_bid', 'passed')")
         if filters.get("sold_from"):
             clauses.append("status_updated_at >= ?"); params.append(filters["sold_from"])
         if filters.get("sold_to"):
@@ -1038,8 +1048,10 @@ class SqliteStore:
             page_sql = " LIMIT ? OFFSET ?"
             params.extend([limit, offset])
         rows = self.conn.execute(
-            "SELECT id, stock_number, observed_at, price_type, amount, run_id "
-            "FROM price_history WHERE stock_number = ? "
+            "SELECT id, stock_number, observed_at, price_type, amount, currency, "
+            "source_observed_at, run_id "
+            "FROM price_history "
+            "WHERE stock_number = ? AND price_type NOT LIKE 'status_%' "
             "ORDER BY observed_at, price_type, id" + page_sql,
             params,
         ).fetchall()
@@ -1047,7 +1059,8 @@ class SqliteStore:
 
     def count_price_history(self, stock_number: str) -> int:
         return int(self.conn.execute(
-            "SELECT COUNT(*) FROM price_history WHERE stock_number = ?",
+            "SELECT COUNT(*) FROM price_history "
+            "WHERE stock_number = ? AND price_type NOT LIKE 'status_%'",
             (stock_number,),
         ).fetchone()[0])
 

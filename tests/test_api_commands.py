@@ -32,6 +32,14 @@ def test_list_commands(api_client):
     assert any(c["name"] == "crawl" for c in body["commands"])
 
 
+def test_crawl_command_page_size_default_tracks_mode():
+    from iaai_scraper.api import CrawlCommand
+
+    assert CrawlCommand().resolved_page_size() == config.ONTARIO_PAGE_SIZE
+    assert CrawlCommand(canada_wide=True).resolved_page_size() == config.PAGE_SIZE
+    assert CrawlCommand(page_size=50, canada_wide=True).resolved_page_size() == 50
+
+
 def test_crawl_command_accepts_and_completes(api_client, monkeypatch):
     report = CrawlReport(
         started_at=datetime.now(timezone.utc),

@@ -33,9 +33,9 @@ def _setup_logging(verbose: bool) -> None:
 @app.command()
 def crawl(
     max_pages: int = typer.Option(config.MAX_LIST_PAGES, min=1, help="hard cap on list pages"),
-    page_size: int = typer.Option(
-        config.ONTARIO_PAGE_SIZE if config.ONTARIO_AT_SOURCE else config.PAGE_SIZE,
-        min=1, max=1000, help="rows per page (up to 1000 for Ontario-at-source)",
+    page_size: Optional[int] = typer.Option(
+        None, min=1, max=1000,
+        help="rows per page (default: 1000 Ontario-at-source, 100 legacy Canada-wide)",
     ),
     canada_wide: bool = typer.Option(
         False, "--canada-wide", help="legacy: crawl all Canada and filter client-side",
@@ -46,6 +46,10 @@ def crawl(
     """Run a full Ontario crawl and write to the DB + raw JSONL."""
     _setup_logging(verbose)
     ontario_at_source = not canada_wide
+    if page_size is None:
+        # 1000 is only verified for the BranchIds-filtered Ontario path; the
+        # legacy Canada-wide crawl was validated at 100 rows per page.
+        page_size = config.ONTARIO_PAGE_SIZE if ontario_at_source else config.PAGE_SIZE
     settings = config.CrawlSettings(
         page_size=page_size,
         max_list_pages=max_pages,

@@ -132,6 +132,10 @@ IMAGE_CACHE_ENABLED = os.getenv("IAAI_IMAGE_CACHE", "true").lower() in (
 )
 IMAGE_FETCH_TIMEOUT_S = _env_float("IAAI_IMAGE_FETCH_TIMEOUT", 15.0)
 IMAGE_CACHE_MAX_BYTES = _env_int("IAAI_IMAGE_CACHE_MAX_BYTES", 2_000_000)
+# Remember an upstream fetch failure this long before retrying (negative cache).
+IMAGE_NEGATIVE_TTL_S = _env_float("IAAI_IMAGE_NEGATIVE_TTL", 600.0)
+# Evict cached thumbs untouched for this long (0 disables the TTL sweep).
+IMAGE_CACHE_TTL_S = _env_float("IAAI_IMAGE_CACHE_TTL", 30 * 86400.0)
 # Comma-separated HTTPS hosts allowed as thumbnail sources (SSRF guard).
 _IMAGE_HOSTS_RAW = os.getenv(
     "IAAI_IMAGE_ALLOWED_HOSTS",
