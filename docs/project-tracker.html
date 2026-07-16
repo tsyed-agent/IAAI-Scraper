@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-updated="2026-07-16T23:04">
+<html lang="en" data-updated="2026-07-16T23:10">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -290,8 +290,9 @@
       </p>
       <div class="meta">
         <span class="pill">Updated <strong id="board-updated">2026-07-16</strong></span>
-        <span class="pill">Current: Phase 0 (Task 12 container verify)</span>
-        <a href="./handoffs/2026-07-16-phase0-handoff.md">Handoff</a>
+        <span class="pill">Current: Phase 2 Task 4 (scheduler done) → Task 2 backups</span>
+        <a href="./handoffs/2026-07-16-phase0-phase2-handoff.md">Handoff (latest)</a>
+        <a href="./handoffs/2026-07-16-phase0-handoff.md">Handoff (morning)</a>
         <a href="./09-enterprise-hardening-plan.md">Plan 09</a>
         <a href="./10-implementation-plan.md">Plan 10</a>
         <a href="./project-tracker.md">How to update</a>
@@ -741,18 +742,28 @@
           </summary>
         </details>
 
-        <details class="task" data-status="open" data-id="2.4">
+        <details class="task" data-status="completed" data-id="2.4">
           <summary>
             <span class="check"></span>
             <span class="task-n">Task 4</span>
             <span>
-              <span class="task-name">Scheduler + whole-run retry (durable worker start)</span>
-              <span class="task-ref">doc 10 · 2.4 · Handoff D</span>
+              <span class="task-name">Scheduler + whole-run retry (thin wrapper)</span>
+              <span class="task-ref">doc 10 · 2.4a · Handoff D</span>
             </span>
-            <span class="tags"><span class="tag open">open</span> <span class="tag blocking">blocking</span></span>
+            <span class="tags"><span class="tag completed">completed</span></span>
           </summary>
           <div class="task-body">
-            <p><code>docs/ops-scheduling.md</code> + <code>scripts/scheduled_crawl.sh</code>; one retry after 20m; cron → CLI, not API job.</p>
+            <h4>Acceptance</h4>
+            <p><code>scripts/scheduled_crawl.sh</code> + <code>docs/ops-scheduling.md</code>; lock-busy exit 0; one retry; alert on second fail. Full queue worker still open (2.4b).</p>
+            <h4>PR / commits</h4>
+            <p><a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/9">PR #9</a> · <code>1d8ad29</code></p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
+              <p>POSIX wrapper + offline shell tests (4). Full durable worker still P0.</p></li>
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
+              <p>Validated retry/jitter settings and added real randomized startup delay; 131 offline tests green.</p></li>
+            </ul>
           </div>
         </details>
 

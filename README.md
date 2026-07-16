@@ -89,6 +89,7 @@ python -m iaai_scraper.cli stats            # DB statistics
 python -m iaai_scraper.cli backup           # atomic snapshot under data/backups/
 python scripts/verify_ontario_crawl.py     # verify last crawl invariants
 python scripts/audit_raw_coverage.py data/raw/**/*.jsonl.gz  # offline field/completeness audit
+scripts/scheduled_crawl.sh                 # cron entrypoint: crawl + one retry (see docs/ops-scheduling.md)
 ```
 
 Example API calls:
@@ -173,8 +174,10 @@ completeness checks), usage, results, and limitations are documented in
 | [`docs/07-live-verification.md`](docs/07-live-verification.md) | **Live E2E verification of Ontario-at-source crawl (2026-06-26).** |
 | [`docs/09-enterprise-hardening-plan.md`](docs/09-enterprise-hardening-plan.md) | **Production gates, target architecture, testing, SLOs, and multi-source roadmap.** |
 | [`docs/10-implementation-plan.md`](docs/10-implementation-plan.md) | **Actionable next plan: media pointers/cache, UI boundary, remaining P0/P1 tasks.** |
+| [`docs/ops-scheduling.md`](docs/ops-scheduling.md) | Cron/systemd crawl schedule + `scheduled_crawl.sh` retry wrapper. |
 | [`docs/project-tracker.html`](docs/project-tracker.html) | **Living HTML status board** (phases, tasks, tags, agent comments, PR links). |
 | [`docs/project-tracker.md`](docs/project-tracker.md) | How agents must update the tracker (short). |
+| [`docs/handoffs/2026-07-16-phase0-phase2-handoff.md`](docs/handoffs/2026-07-16-phase0-phase2-handoff.md) | **Latest handoff** (merge #8→#9, next = off-host backups). |
 
 ## Project layout
 

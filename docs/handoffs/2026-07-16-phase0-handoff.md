@@ -9,6 +9,9 @@
 > [`docs/10-implementation-plan.md`](../10-implementation-plan.md) (media/UI
 > checklists). This handoff tells you where we are inside those plans.
 >
+> **Superseded for current merge order / next tasks:**  
+> [`2026-07-16-phase0-phase2-handoff.md`](./2026-07-16-phase0-phase2-handoff.md)
+> (evening handoff after PRs #8/#9). Keep this file for Phase 0 item background.
 > **Status board:** [`docs/project-tracker.html`](../project-tracker.html) —
 > update the task you touch (see [`project-tracker.md`](../project-tracker.md)).
 
@@ -162,21 +165,12 @@ re-test. Record the result in doc 09 Phase 0 row 0.11 (flip ◐ to ✅).
 `_hydrate` embeds `?expires=&sig=`; thumbnail auth accepts header, signed query,
 or deprecated `?api_key=`. Offline tests in `tests/test_api_auth.py`.
 
-### Task D — Scheduler + whole-run retry (doc 09 §6, P0 "durable worker" start)
+### Task D — Scheduler + whole-run retry (doc 09 §6, P0 "durable worker" start) ✅
 
-**Do this** (ops/docs first, code second):
-1. Add `docs/ops-scheduling.md` (or a README section) with the recommended
-   crontab, e.g. every 6 hours with jitter:
-   `17 */6 * * * cd /srv/iaai && .venv/bin/python -m iaai_scraper.cli crawl || <alert-hook>`
-2. Add a thin wrapper script `scripts/scheduled_crawl.sh`: run the CLI crawl;
-   on non-zero exit, retry **once** after 20 minutes; on second failure, emit a
-   loud log line / webhook call and exit non-zero. Keep it POSIX sh, no deps.
-3. Do **not** build the full queue/worker yet — that's the P0 package in doc 09
-   §15; this task just makes today's cron path safe.
-
-**Acceptance:** script is idempotent under the crawl lock (a concurrent run
-exits cleanly with "another crawl running"), and a simulated failure
-(`IAAI_MAX_LIST_PAGES=0`-style or a fake) triggers exactly one retry.
+**Status:** `docs/ops-scheduling.md` + `scripts/scheduled_crawl.sh` +
+`tests/test_scheduled_crawl.py`. Lock-busy → exit 0 no retry; other failure →
+one retry after `IAAI_SCHED_RETRY_DELAY_S` (default 1200); second failure →
+`ALERT:` + optional `IAAI_SCHED_ALERT_HOOK`.
 
 ### Task E — Off-host backups (doc 09 §7 + P0 package)
 
