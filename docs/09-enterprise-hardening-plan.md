@@ -218,9 +218,12 @@ These are starting targets and should be confirmed with product stakeholders:
 ## 9. Remaining product decisions
 
 - exact refresh cadence and acceptable staleness;
-- which source fields and images may legally be displayed;
+- which source fields and images may **legally** be displayed (technical media
+  approach is decided in [`10-implementation-plan.md`](./10-implementation-plan.md):
+  store URL pointers, serve thumbs via our API with on-demand cache; crawl never
+  downloads binaries);
 - definition of a confirmed sale versus inferred bid signal;
-- retention period and correction/takedown workflow;
+- retention period and correction/takedown workflow (including cached thumbs);
 - public versus dealer-only access to VIN, raw fields, and historical prices;
 - first additional source used to validate the adapter architecture.
 
@@ -252,9 +255,18 @@ behavior; the authorized live canary remains a production gate.
 | P0 | Authorized three-run branch/all-Ontario canary and manual source reconciliation | data QA | authorization + staging | exact totals, branches, schema, prices, and status samples |
 | P1 | PostgreSQL canonical schema with source-aware keys and versioned migrations | backend/data | second-source choice | collision/backfill/rollback tests pass |
 | P1 | Adapter SDK, fixture contract, checkpoint/DLQ conventions | data engineering | canonical schema | two adapters pass the same conformance suite |
-| P1 | Website BFF, cache policy, public response schemas and dealer/public RBAC | web/backend/security | private API + gateway | load/auth/privacy/contract tests pass |
+| P1 | Media pointers + on-demand thumbnail cache (API `thumbnail_href` + `/lots/{stock}/thumbnail`) | backend | image_url column + legal policy for prod display | see [`10-implementation-plan.md`](./10-implementation-plan.md) Phase 1 |
+| P1 | Website BFF, public response schemas, dealer/public RBAC, lazy viewport thumbs | web/backend/security | private API + media route + gateway | load/auth/privacy/contract tests pass |
 | P2 | Search relevance, entity resolution, price analytics and confidence labels | data/product | two-source history | explainable match and pricing-quality benchmarks |
 
 P0 items are release blockers and should be completed in order where dependencies
 require it. P1 is required before the second marketplace is onboarded. P2 should be
 driven by measured dealer workflows and archive quality rather than scraper volume.
+
+## 12. Actionable next plan
+
+The sequenced implementation plan (media boundary, UI integration, and remaining
+P0 gates) lives in
+[`10-implementation-plan.md`](./10-implementation-plan.md).
+Use that document for task checklists and acceptance criteria; keep this file as
+the enterprise release-gate and multi-source architecture source of truth.

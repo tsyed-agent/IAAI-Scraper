@@ -4,12 +4,16 @@ Data collection system for **IAA / IAAI Canada** vehicle auction listings
 (`https://ca.iaai.com/`), scoped to **Ontario**. It collects structured auction
 lot data, stores it in a searchable database, and exposes it through an internal
 API for querying, filtering, and retrieval — optimised for completeness, speed,
-reliability, and cost. Images are intentionally **not** collected.
+reliability, and cost. The crawl stores image **URL pointers** only (no binaries);
+on-demand thumbnail caching for the UI is specified in
+[`docs/10-implementation-plan.md`](docs/10-implementation-plan.md).
 
 > Status: **hardened staging baseline.** Captured-data tests, migrations, raw
 > replay audits, and API tests pass. Production launch still requires the legal,
 > backup/restore, gateway, observability, and authorized-live-canary gates in
 > [`docs/09-enterprise-hardening-plan.md`](docs/09-enterprise-hardening-plan.md).
+> Next implementation work is sequenced in
+> [`docs/10-implementation-plan.md`](docs/10-implementation-plan.md).
 
 ## Docker (recommended for deployment)
 
@@ -167,6 +171,7 @@ completeness checks), usage, results, and limitations are documented in
 | [`docs/06-realtime-archive-infrastructure.md`](docs/06-realtime-archive-infrastructure.md) | **Real-time price + historical archive: free-infra research & recommendation.** |
 | [`docs/07-live-verification.md`](docs/07-live-verification.md) | **Live E2E verification of Ontario-at-source crawl (2026-06-26).** |
 | [`docs/09-enterprise-hardening-plan.md`](docs/09-enterprise-hardening-plan.md) | **Production gates, target architecture, testing, SLOs, and multi-source roadmap.** |
+| [`docs/10-implementation-plan.md`](docs/10-implementation-plan.md) | **Actionable next plan: media pointers/cache, UI boundary, remaining P0/P1 tasks.** |
 
 ## Project layout
 
@@ -181,7 +186,9 @@ requirements.txt
 ## Limitations
 
 - VIN is **masked** for anonymous users (full VIN needs a logged-in buyer account).
-- Images are skipped by design (URLs remain in the preserved `raw` payload).
+- The crawl stores thumbnail **URL pointers** only (no image binaries on the hot
+  path). Serving cached thumbs via the API is planned in
+  [`docs/10-implementation-plan.md`](docs/10-implementation-plan.md).
 - Automated collection, retention, redistribution, and imagery require appropriate
   source authorization or a licensed data agreement before production use.
 - SQLite is the hardened single-source baseline; PostgreSQL and composite

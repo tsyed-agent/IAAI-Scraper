@@ -1,9 +1,10 @@
 # IAAI Lot Data Model (Ontario)
 
 > Proposed normalized schema for an auction lot. Field availability will be
-> confirmed against live `VehicleDetails/{id}` pages during Phase 0. Images are
-> intentionally excluded (we may optionally retain image *URLs* as text, but never
-> download binaries for now).
+> confirmed against live `VehicleDetails/{id}` pages during Phase 0. The crawl
+> stores thumbnail *URL pointers* (`image_url`) only — it does not download
+> binaries. Serving thumbs to a UI is an API concern (on-demand cache); see
+> [`10-implementation-plan.md`](./10-implementation-plan.md).
 
 ## 1. Field catalogue
 
@@ -81,7 +82,7 @@
 | `last_changed` | datetime | last time a tracked field changed. |
 | `source` | string | `ca.iaai.com`. |
 | `raw_json` | json/text | full raw parsed payload (replay/debug). |
-| `image_urls` | json/text | **optional**, URLs only — no binaries downloaded. |
+| `image_url` | text | Source thumbnail URL pointer (e.g. `anvis.iaai.com`). Crawl never stores binaries; API may cache thumbs on demand. |
 
 ## 2. SQLite DDL (MVP)
 
