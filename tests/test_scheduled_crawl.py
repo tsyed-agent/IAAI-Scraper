@@ -6,6 +6,8 @@ import stat
 import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "scheduled_crawl.sh"
 
@@ -16,7 +18,8 @@ def _write_fake(path: Path, body: str) -> None:
 
 
 def _run(env: dict[str, str], timeout: float = 10.0) -> subprocess.CompletedProcess[str]:
-    merged = {**os.environ, **env}
+    # Keep offline tests deterministic and avoid waiting for production jitter.
+    merged = {**os.environ, "IAAI_SCHED_JITTER_S": "0", **env}
     return subprocess.run(
         ["sh", str(SCRIPT)],
         cwd=str(ROOT),
@@ -107,3 +110,58 @@ def test_retry_succeeds_after_first_failure(tmp_path: Path):
     assert r.returncode == 0
     assert counter.read_text().strip() == "2"
     assert "crawl completed on retry" in r.stdout
+
+
+@pytest.mark.parametrize("value", ["-1", "not-a-number"])
+def test_invalid_retry_delay_is_rejected_before_crawl(tmp_path: Path, value: str):
+    fake = tmp_path / "crawl.sh"
+    marker = tmp_path / "ran"
+    _write_fake(fake, f"#!/bin/sh\necho ran > '{marker}'\n")
+
+    r = _run({
+        "IAAI_CRAWL_CMD": str(fake),
+        "IAAI_SCHED_RETRY_DELAY_S": value,
+    })
+
+    assert r.returncode == 2
+    assert not marker.exists()
+    assert "invalid IAAI_SCHED_RETRY_DELAY_S" in r.stdout
+
+
+def test_invalid_jitter_is_rejected_before_crawl(tmp_path: Path):
+    fake = tmp_path / "crawl.sh"
+    marker = tmp_path / "ran"
+    _write_fake(fake, f"#!/bin/sh\necho ran > '{marker}'\n")
+
+    r = _run({
+        "IAAI_CRAWL_CMD": str(fake),
+        "IAAI_SCHED_JITTER_S": "-5",
+    })
+
+    assert r.returncode == 2
+    assert not marker.exists()
+    assert "invalid IAAI_SCHED_JITTER_S" in r.stdout
+
+
+def test_configured_jitter_runs_before_crawl_without_waiting(tmp_path: Path):
+    fake = tmp_path / "crawl.sh"
+    sleep_log = tmp_path / "sleep.log"
+    order_log = tmp_path / "order.log"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _write_fake(fake, f"#!/bin/sh\necho crawl >> '{order_log}'\n")
+    _write_fake(bin_dir / "od", "#!/bin/sh\necho '  1'\n")
+    _write_fake(
+        bin_dir / "sleep",
+        f"#!/bin/sh\necho \"sleep:$1\" > '{sleep_log}'; exit 0\n",
+    )
+
+    r = _run({
+        "IAAI_CRAWL_CMD": str(fake),
+        "IAAI_SCHED_JITTER_S": "5",
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+    })
+
+    assert r.returncode == 0
+    assert sleep_log.read_text().strip() == "sleep:1"
+    assert order_log.read_text().splitlines() == ["crawl"]

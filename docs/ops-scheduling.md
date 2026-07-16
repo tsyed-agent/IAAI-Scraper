@@ -11,6 +11,7 @@ Policy (doc 09 §6):
 | Sale window (later) | every 15–30 minutes | Only while active lots are closing — Handoff Task F |
 | Concurrent runs | never | OS lock in `crawler.py`; wrapper exits cleanly if busy |
 | Whole-run retry | once after ~20 minutes | Then alert and stop |
+| Startup jitter | uniform 0–5 minutes by default | Set `IAAI_SCHED_JITTER_S=0` to disable |
 
 ## Wrapper
 
@@ -20,17 +21,24 @@ scripts/scheduled_crawl.sh
 
 - Runs `python -m iaai_scraper.cli crawl` (override with `IAAI_CRAWL_CMD`).
 - Lock busy → exit 0, no retry.
-- Other failure → sleep `IAAI_SCHED_RETRY_DELAY_S` (default 1200) → one retry.
+- Before the first crawl, sleeps a random whole number of seconds from
+  `0..IAAI_SCHED_JITTER_S` (default 300). This is real start-time jitter, not
+  a fixed cron minute; the wrapper uses `/dev/urandom` and POSIX `awk`.
+- `IAAI_SCHED_RETRY_DELAY_S` must be a nonnegative integer. Other failure →
+  sleep that many seconds (default 1200) → one retry.
+- `IAAI_SCHED_JITTER_S` must also be a nonnegative integer. Invalid scheduler
+  settings are rejected before a crawl and emit an `ALERT:` line.
 - Second failure → loud `ALERT:` log line, optional `IAAI_SCHED_ALERT_HOOK`, exit 1.
 
-## Example crontab (6-hour baseline + jitter)
+## Example crontab (6-hour baseline + wrapper jitter)
 
 ```cron
-# Ontario inventory crawl — minute 17 of hours 0,6,12,18 UTC
-17 0,6,12,18 * * * cd /srv/iaai && .venv/bin/python -c 'pass' && IAAI_PYTHON=/srv/iaai/.venv/bin/python /srv/iaai/scripts/scheduled_crawl.sh >>/var/log/iaai-crawl.log 2>&1
+# Ontario inventory crawl — exact hour is randomized by the wrapper (0–5 min)
+0 0,6,12,18 * * * cd /srv/iaai && IAAI_PYTHON=/srv/iaai/.venv/bin/python IAAI_SCHED_JITTER_S=300 /srv/iaai/scripts/scheduled_crawl.sh >>/var/log/iaai-crawl.log 2>&1
 ```
 
 Prefer the project venv’s Python via `IAAI_PYTHON=…/.venv/bin/python`.
+For deterministic maintenance or tests, set `IAAI_SCHED_JITTER_S=0`.
 
 Optional alert hook (webhook / mailer):
 
@@ -41,7 +49,19 @@ export IAAI_SCHED_ALERT_HOOK='curl -fsS -X POST -d @- https://hooks.example/iaai
 ## systemd timer (alternative)
 
 `iaai-crawl.service` → `ExecStart=/srv/iaai/scripts/scheduled_crawl.sh`  
-`iaai-crawl.timer` → `OnCalendar=*-*-* 00/6:17:00` (adjust to taste).
+`iaai-crawl.timer`:
+
+```ini
+[Timer]
+OnCalendar=*-*-* 00/6:00:00
+RandomizedDelaySec=5min
+Persistent=true
+```
+
+Use either systemd's `RandomizedDelaySec` or the wrapper's
+`IAAI_SCHED_JITTER_S`, not both. If systemd owns the jitter, set
+`IAAI_SCHED_JITTER_S=0` in the service environment; the wrapper setting is
+useful when the same entrypoint is run from cron and systemd.
 
 ## Do not
 
