@@ -271,9 +271,11 @@ class Crawler:
                        f"{report.total_canada} to {total}")
                 report.anomalies.append(msg)
                 raise RuntimeError(msg)
+            # Normalize exactly like the parser (str + strip) so duplicate
+            # detection compares the same key space as ``seen_stock``.
             keys = {
-                str(row.get("StockNum")) for row in rows
-                if isinstance(row, dict) and row.get("StockNum") not in (None, "")
+                stock for row in rows if isinstance(row, dict)
+                for stock in (str(row.get("StockNum", "")).strip(),) if stock
             }
             duplicate = bool(rows) and bool(keys) and keys.issubset(seen_stock)
             short = bool(rows) and len(rows) < self.settings.page_size

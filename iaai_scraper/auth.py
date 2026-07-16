@@ -130,3 +130,18 @@ def require_command_auth(
         x_api_key,
         expected=command_token(),
     )
+
+
+def require_readyz_auth(
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+) -> None:
+    """Auth for ``GET /readyz``; optionally opened to unauthenticated probes.
+
+    Load balancers and orchestrators usually cannot attach headers to health
+    probes. ``IAAI_READYZ_PUBLIC=true`` exempts the route — it exposes only
+    counts and timestamps, never lot data.
+    """
+    if os.getenv("IAAI_READYZ_PUBLIC", "").strip().lower() in ("1", "true", "yes", "on"):
+        return
+    require_api_auth(authorization, x_api_key)

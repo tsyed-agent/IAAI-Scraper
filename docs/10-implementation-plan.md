@@ -181,12 +181,12 @@ doc 09 staging (PR #6) ──┘
 - [x] 1.7 Docker volume path
 
 ### Phase 1.5 — Media hardening (from doc 09 Phase 0 review fixes)
-- [ ] 0.2 Redirect re-validation in `images._default_fetch` (every hop allowlisted, or 3xx → error)
-- [ ] 0.5a Per-key single-flight lock (concurrent misses → one upstream fetch)
-- [ ] 0.5b Negative caching of upstream failures (~10 min)
-- [ ] 0.5c Stale-on-error: serve last good thumb when refetch fails
-- [ ] 0.5d Eviction: removed/delisted lots + TTL/size sweep
-- [ ] 0.6 Log redaction now; signed short-lived media URLs to replace `?api_key=` before UI GA
+- [x] 0.2 Redirects refused in `images._default_fetch` (3xx → `ImageFetchError`)
+- [x] 0.5a Per-key single-flight lock (concurrent misses → one upstream fetch)
+- [x] 0.5b Negative caching of upstream failures (`IAAI_IMAGE_NEGATIVE_TTL`, default 10 min)
+- [x] 0.5c Stale-on-error: serve last good thumb when refetch fails
+- [x] 0.5d Eviction: `evict()`/`sweep()` — removed lots + TTL sweep at API startup (`IAAI_IMAGE_CACHE_TTL`)
+- [ ] 0.6 Log redaction; signed short-lived media URLs to replace `?api_key=` before UI GA
 - [ ] Optional: post-crawl warmer for first-page active-lot thumbs (no cold miss on default view)
 
 ### Phase 2 — Production P0

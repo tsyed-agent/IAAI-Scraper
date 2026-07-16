@@ -26,6 +26,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=256m,mode=1777
+      # Chromium needs shared memory for in-container crawls (read_only root).
+      - /dev/shm:size=512m
     # No extra ports, no host network — only published 8000/tcp on loopback.
 
 volumes:

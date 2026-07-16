@@ -93,10 +93,72 @@ def test_active_to_sold_records_status_and_final_price(tmp_path):
     store.upsert_lot(parse_row(make_row("903", ItemStatusDesc="Sold", HighPrebidValue="$800.00")))
     hist = store.get_price_history("903")
     types = {h["price_type"] for h in hist}
-    assert "status_sold" in types
+    # Lifecycle transitions live in lot_status_history only; the price table
+    # holds prices.
     assert "final" in types
+    assert not any(t.startswith("status_") for t in types)
     assert store.get_status_history("903")[-1]["new_status"] == "sold"
     store.close()
+
+
+def test_price_history_carries_provenance(tmp_path):
+    store = SqliteStore(db_path=tmp_path / "t.db")
+    row = make_row(
+        "905",
+        HighPrebidValue="$1,200.00",
+        ServerCurrentDateUTC="/Date(1782313200000)/",
+    )
+    store.upsert_lot(parse_row(row))
+    hist = store.get_price_history("905")
+    prebid = [h for h in hist if h["price_type"] == "prebid"]
+    assert prebid and prebid[0]["currency"] == "CAD"
+    assert prebid[0]["source_observed_at"] is not None
+    store.close()
+
+
+def test_legacy_status_rows_hidden_from_price_history(tmp_path):
+    store = SqliteStore(db_path=tmp_path / "t.db")
+    store.upsert_lot(parse_row(make_row("906", HighPrebidValue="$700.00")))
+    # Simulate a pre-migration database that logged lifecycle rows here.
+    store.conn.execute(
+        "INSERT INTO price_history (stock_number, observed_at, price_type, amount) "
+        "VALUES ('906', '2026-01-01T00:00:00+00:00', 'status_sold', 700.0)"
+    )
+    store.commit()
+    hist = store.get_price_history("906")
+    assert all(not h["price_type"].startswith("status_") for h in hist)
+    assert store.count_price_history("906") == len(hist)
+    store.close()
+
+
+def test_sold_filter_excludes_non_concluded_status_changes(tmp_path):
+    store = SqliteStore(db_path=tmp_path / "t.db")
+    store.upsert_lot(parse_row(make_row("907", ItemStatusDesc="Sold", HighPrebidValue="$1.00")))
+    store.upsert_lot(parse_row(make_row("908", ItemStatusDesc="")))  # active
+    store.commit()
+    rows, total = store.query_lots(
+        {"sold_from": "2020-01-01T00:00:00+00:00"}, limit=10, offset=0,
+    )
+    assert total == 1 and rows[0]["stock_number"] == "907"
+    store.close()
+
+
+def test_schema_setup_runs_once_per_path(tmp_path, monkeypatch):
+    calls = []
+    original = SqliteStore._migrate
+
+    def counting_migrate(self):
+        calls.append(1)
+        return original(self)
+
+    monkeypatch.setattr(SqliteStore, "_migrate", counting_migrate)
+    db = tmp_path / "once.db"
+    SqliteStore(db_path=db).close()
+    SqliteStore(db_path=db).close()
+    assert len(calls) == 1
+    # Explicit override still forces schema work (used by ops tooling).
+    SqliteStore(db_path=db, ensure_schema=True).close()
+    assert len(calls) == 2
 
 
 def test_removed_lot_reappearing_becomes_active(tmp_path):

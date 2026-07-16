@@ -11,9 +11,10 @@ runner = CliRunner()
 
 class _FakeCrawler:
     status = "completed"
+    last_settings = None
 
-    def __init__(self, _settings):
-        pass
+    def __init__(self, settings):
+        _FakeCrawler.last_settings = settings
 
     async def run(self):
         return CrawlReport(
@@ -30,3 +31,16 @@ def test_crawl_cli_exits_zero_only_for_completed(monkeypatch):
     assert runner.invoke(cli.app, ["crawl", "--max-pages", "1"]).exit_code == 1
     _FakeCrawler.status = "failed"
     assert runner.invoke(cli.app, ["crawl", "--max-pages", "1"]).exit_code == 1
+
+
+def test_crawl_cli_page_size_default_tracks_mode(monkeypatch):
+    from iaai_scraper import config
+
+    monkeypatch.setattr(cli, "Crawler", _FakeCrawler)
+    _FakeCrawler.status = "completed"
+    assert runner.invoke(cli.app, ["crawl"]).exit_code == 0
+    assert _FakeCrawler.last_settings.page_size == config.ONTARIO_PAGE_SIZE
+    assert runner.invoke(cli.app, ["crawl", "--canada-wide"]).exit_code == 0
+    assert _FakeCrawler.last_settings.page_size == config.PAGE_SIZE
+    assert runner.invoke(cli.app, ["crawl", "--canada-wide", "--page-size", "50"]).exit_code == 0
+    assert _FakeCrawler.last_settings.page_size == 50
