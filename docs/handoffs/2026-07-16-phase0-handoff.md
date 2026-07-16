@@ -8,6 +8,10 @@
 > (release gates, phases) and
 > [`docs/10-implementation-plan.md`](../10-implementation-plan.md) (media/UI
 > checklists). This handoff tells you where we are inside those plans.
+>
+> **Superseded for current merge order / next tasks:**  
+> [`2026-07-16-phase0-phase2-handoff.md`](./2026-07-16-phase0-phase2-handoff.md)
+> (evening handoff after PRs #8/#9). Keep this file for Phase 0 item background.
 
 ---
 

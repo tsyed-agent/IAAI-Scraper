@@ -176,6 +176,7 @@ completeness checks), usage, results, and limitations are documented in
 | [`docs/10-implementation-plan.md`](docs/10-implementation-plan.md) | **Actionable next plan: media pointers/cache, UI boundary, remaining P0/P1 tasks.** |
 | [`docs/ops-scheduling.md`](docs/ops-scheduling.md) | Cron/systemd crawl schedule + `scheduled_crawl.sh` retry wrapper. |
 | [`docs/project-tracker.html`](docs/project-tracker.html) | Living HTML status board (phases/tasks). |
+| [`docs/handoffs/2026-07-16-phase0-phase2-handoff.md`](docs/handoffs/2026-07-16-phase0-phase2-handoff.md) | **Latest handoff** (merge #8→#9, next = off-host backups). |
 
 ## Project layout
 
