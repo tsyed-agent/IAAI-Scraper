@@ -180,6 +180,15 @@ doc 09 staging (PR #6) ──┘
 - [x] 1.6 README / model docs
 - [x] 1.7 Docker volume path
 
+### Phase 1.5 — Media hardening (from doc 09 Phase 0 review fixes)
+- [ ] 0.2 Redirect re-validation in `images._default_fetch` (every hop allowlisted, or 3xx → error)
+- [ ] 0.5a Per-key single-flight lock (concurrent misses → one upstream fetch)
+- [ ] 0.5b Negative caching of upstream failures (~10 min)
+- [ ] 0.5c Stale-on-error: serve last good thumb when refetch fails
+- [ ] 0.5d Eviction: removed/delisted lots + TTL/size sweep
+- [ ] 0.6 Log redaction now; signed short-lived media URLs to replace `?api_key=` before UI GA
+- [ ] Optional: post-crawl warmer for first-page active-lot thumbs (no cold miss on default view)
+
 ### Phase 2 — Production P0
 - [ ] 2.1 Legal / image policy
 - [ ] 2.2 Off-host backup/restore
