@@ -13,7 +13,7 @@ import os
 import secrets
 from typing import Optional
 
-from fastapi import Header, HTTPException
+from fastapi import Header, HTTPException, Query
 
 log = logging.getLogger("iaai.auth")
 
@@ -99,6 +99,21 @@ def require_api_auth(
     if not require_auth_enabled():
         return
     verify_request_token(authorization, x_api_key)
+
+
+def require_api_auth_flexible(
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    api_key: Optional[str] = Query(
+        None,
+        description="Optional token for <img src> (thumbnail route only)",
+    ),
+) -> None:
+    """Like ``require_api_auth`` but also accepts ``?api_key=`` for media URLs."""
+    if not require_auth_enabled():
+        return
+    # Prefer headers; fall back to query so browsers can load authenticated images.
+    verify_request_token(authorization, x_api_key or api_key)
 
 
 def require_command_auth(

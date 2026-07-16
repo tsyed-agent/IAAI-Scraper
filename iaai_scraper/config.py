@@ -122,6 +122,27 @@ CHALLENGE_TIMEOUT_S = _env_int("IAAI_CHALLENGE_TIMEOUT", 45)
 DATA_DIR = Path(os.getenv("IAAI_DATA_DIR", "data"))
 RAW_DIR = DATA_DIR / "raw"               # gzipped JSONL landing layer
 DB_PATH = Path(os.getenv("IAAI_DB_PATH", str(DATA_DIR / "iaai_ontario.db")))
+# On-demand thumbnail cache (API only — never used by the crawl hot path).
+IMAGE_CACHE_DIR = Path(
+    os.getenv("IAAI_IMAGE_CACHE_DIR", str(DATA_DIR / "image_cache"))
+)
+# Private API default: on. Disable until legal/display policy allows caching.
+IMAGE_CACHE_ENABLED = os.getenv("IAAI_IMAGE_CACHE", "true").lower() in (
+    "1", "true", "yes", "on",
+)
+IMAGE_FETCH_TIMEOUT_S = _env_float("IAAI_IMAGE_FETCH_TIMEOUT", 15.0)
+IMAGE_CACHE_MAX_BYTES = _env_int("IAAI_IMAGE_CACHE_MAX_BYTES", 2_000_000)
+# Comma-separated HTTPS hosts allowed as thumbnail sources (SSRF guard).
+_IMAGE_HOSTS_RAW = os.getenv(
+    "IAAI_IMAGE_ALLOWED_HOSTS",
+    "anvis.iaai.com,vis.iaai.com",
+)
+IMAGE_ALLOWED_HOSTS = frozenset(
+    h.strip().lower() for h in _IMAGE_HOSTS_RAW.split(",") if h.strip()
+)
+IMAGE_CACHE_CONTROL = os.getenv(
+    "IAAI_IMAGE_CACHE_CONTROL", "public, max-age=86400"
+)
 
 
 @dataclass

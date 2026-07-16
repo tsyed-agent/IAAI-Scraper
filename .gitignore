@@ -20,5 +20,8 @@ spike/out/
 # Secrets / local env
 .env
 
+# Local agent tooling (Codex role configs)
+.codex/
+
 # OS
 .DS_Store

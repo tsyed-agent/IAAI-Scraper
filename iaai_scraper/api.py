@@ -3,6 +3,7 @@
 Read endpoints (local DB only):
   GET /healthz, /readyz, /stats, /stats/freshness, /filters, /branches
   GET /lots, /lots/{stock}, /lots/{stock}/price-history
+  GET /lots/{stock}/thumbnail — on-demand cached thumb (allowlisted source URL)
 
 Commands (same process, shared crawler logic):
   GET  /commands              — list available commands
@@ -11,7 +12,8 @@ Commands (same process, shared crawler logic):
 
 Authentication (when ``IAAI_REQUIRE_AUTH`` is enabled or ``IAAI_API_TOKEN`` is set):
   All routes except ``GET /healthz`` require ``Authorization: Bearer <token>``
-  or ``X-API-Key: <token>``. Set ``IAAI_API_TOKEN`` in production / Docker.
+  or ``X-API-Key: <token>``. Thumbnail also accepts ``?api_key=`` for ``<img src>``.
+  Set ``IAAI_API_TOKEN`` in production / Docker.
 """
 from __future__ import annotations
 
@@ -27,7 +29,18 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from . import config
-from .auth import require_api_auth, require_command_auth, validate_startup_auth
+from .auth import (
+    require_api_auth,
+    require_api_auth_flexible,
+    require_command_auth,
+    validate_startup_auth,
+)
+from .images import (
+    ImageCacheDisabled,
+    ImageFetchError,
+    ImageSourceRejected,
+    ThumbnailCache,
+)
 from .storage import SqliteStore
 from .sync_manager import sync_manager
 
@@ -66,6 +79,12 @@ def _hydrate(row: dict[str, Any], *, include_raw: bool = False) -> dict[str, Any
     ):
         if row.get(b) is not None:
             row[b] = bool(row[b])
+    # Stable local pointer for the UI; crawl still only stores image_url text.
+    stock = row.get("stock_number")
+    if stock and row.get("image_url"):
+        row["thumbnail_href"] = f"/lots/{stock}/thumbnail"
+    else:
+        row["thumbnail_href"] = None
     return row
 
 
@@ -375,6 +394,37 @@ def get_lot(
         return _hydrate(row, include_raw=include_raw)
     finally:
         store.close()
+
+
+@app.get("/lots/{stock_number}/thumbnail", dependencies=[Depends(require_api_auth_flexible)])
+def get_lot_thumbnail(stock_number: str) -> Response:
+    """Serve a cached thumbnail for a lot (fetch-on-miss from allowlisted ``image_url``)."""
+    store = _store()
+    try:
+        row = store.get_lot(stock_number)
+        if not row:
+            raise HTTPException(status_code=404, detail="lot not found")
+        source_url = row.get("image_url")
+        if not source_url:
+            raise HTTPException(status_code=404, detail="lot has no image_url")
+    finally:
+        store.close()
+
+    cache = ThumbnailCache()
+    try:
+        thumb = cache.get_or_fetch(str(stock_number), str(source_url))
+    except ImageCacheDisabled as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ImageSourceRejected as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ImageFetchError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    headers = {
+        "Cache-Control": config.IMAGE_CACHE_CONTROL,
+        "X-Image-Cache": "HIT" if thumb.from_cache else "MISS",
+    }
+    return Response(content=thumb.body, media_type=thumb.content_type, headers=headers)
 
 
 @app.get("/lots/{stock_number}/price-history", dependencies=[Depends(require_api_auth)])

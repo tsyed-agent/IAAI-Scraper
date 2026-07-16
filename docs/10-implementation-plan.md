@@ -105,6 +105,8 @@ equivalent) if required by policy.
 | 1.6 README + data-model note: crawl stores pointers; API may cache thumbs on demand | docs | README limitations updated |
 | 1.7 Docker: cache under `/data/image_cache` on existing volume | platform | compose env wired |
 
+**Status (2026-07-16):** Phase 1 implemented on branch — see checklist §8.
+
 **Exit:** offline tests green; curling `/lots/{stock}/thumbnail` with a fixture URL populates cache once and serves thereafter without re-fetch (mocked).
 
 ### Phase 2 — Production P0 gates (doc 09 §11)
@@ -170,13 +172,13 @@ doc 09 staging (PR #6) ──┘
 ## 8. Tracking checklist (copy into issues/PRs)
 
 ### Phase 1 — Media API
-- [ ] 1.1 Config + `.env.example`
-- [ ] 1.2 `ThumbnailCache` + unit tests
-- [ ] 1.3 Thumbnail route
-- [ ] 1.4 Auth (`api_key` query)
-- [ ] 1.5 `thumbnail_href` on hydrate
-- [ ] 1.6 README / model docs
-- [ ] 1.7 Docker volume path
+- [x] 1.1 Config + `.env.example`
+- [x] 1.2 `ThumbnailCache` + unit tests
+- [x] 1.3 Thumbnail route
+- [x] 1.4 Auth (`api_key` query)
+- [x] 1.5 `thumbnail_href` on hydrate
+- [x] 1.6 README / model docs
+- [x] 1.7 Docker volume path
 
 ### Phase 2 — Production P0
 - [ ] 2.1 Legal / image policy

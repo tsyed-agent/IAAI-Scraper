@@ -103,6 +103,7 @@ curl "http://127.0.0.1:8000/lots?branch_id=70,56&sort=final_price&descending=tru
 curl "http://127.0.0.1:8000/lots?sort=stock_number&limit=100" # follow next_cursor
 curl "http://127.0.0.1:8000/lots?status=sold&limit=5"   # opt-in status filter
 curl "http://127.0.0.1:8000/lots/12033066"
+curl "http://127.0.0.1:8000/lots/12033066/thumbnail"   # on-demand cached thumb
 curl "http://127.0.0.1:8000/lots/12033066/price-history"
 curl "http://127.0.0.1:8000/lots/12033066/status-history"
 curl "http://127.0.0.1:8000/stats"
@@ -187,8 +188,9 @@ requirements.txt
 
 - VIN is **masked** for anonymous users (full VIN needs a logged-in buyer account).
 - The crawl stores thumbnail **URL pointers** only (no image binaries on the hot
-  path). Serving cached thumbs via the API is planned in
-  [`docs/10-implementation-plan.md`](docs/10-implementation-plan.md).
+  path). The API exposes `thumbnail_href` and can cache thumbs on demand via
+  `GET /lots/{stock}/thumbnail` (see
+  [`docs/10-implementation-plan.md`](docs/10-implementation-plan.md)).
 - Automated collection, retention, redistribution, and imagery require appropriate
   source authorization or a licensed data agreement before production use.
 - SQLite is the hardened single-source baseline; PostgreSQL and composite

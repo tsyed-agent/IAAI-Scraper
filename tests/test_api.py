@@ -18,8 +18,17 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("IAAI_REQUIRE_AUTH", "false")
     monkeypatch.delenv("IAAI_API_TOKEN", raising=False)
     monkeypatch.setattr(config, "DB_PATH", db, raising=False)
+    monkeypatch.setattr(config, "IMAGE_CACHE_DIR", tmp_path / "image_cache", raising=False)
+    monkeypatch.setattr(config, "IMAGE_CACHE_ENABLED", True, raising=False)
+    monkeypatch.setattr(
+        config, "IMAGE_ALLOWED_HOSTS", frozenset({"anvis.iaai.com"}), raising=False,
+    )
     store = SqliteStore(db_path=db)
-    store.upsert_lot(parse_row(make_row("100", ItemStatusDesc="")))
+    store.upsert_lot(parse_row(make_row(
+        "100",
+        ItemStatusDesc="",
+        ImageUrl="https://anvis.iaai.com/thumbnail?imageKeys=100",
+    )))
     store.upsert_lot(parse_row(make_row("200", ItemStatusDesc="Sold", HighPrebidValue=1)))
     now = datetime.now(timezone.utc)
     store.record_run(started_at=now, finished_at=now, status="completed")
@@ -37,6 +46,54 @@ def test_lots_default_returns_all(client):
     stocks = {r["stock_number"] for r in results}
     assert {"100", "200"} <= stocks
     assert all("raw" not in row for row in results)
+    by_stock = {r["stock_number"]: r for r in results}
+    assert by_stock["100"]["thumbnail_href"] == "/lots/100/thumbnail"
+    assert by_stock["100"]["image_url"].startswith("https://anvis.iaai.com/")
+    assert by_stock["200"]["thumbnail_href"] is None
+
+
+def test_thumbnail_miss_then_hit(client, monkeypatch):
+    calls: list[str] = []
+
+    def fake_fetch(url: str, timeout_s: float):
+        calls.append(url)
+        return b"\xff\xd8\xffthumb", "image/jpeg"
+
+    monkeypatch.setattr("iaai_scraper.images._default_fetch", fake_fetch)
+    first = client.get("/lots/100/thumbnail")
+    second = client.get("/lots/100/thumbnail")
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.content == second.content == b"\xff\xd8\xffthumb"
+    assert first.headers["content-type"].startswith("image/jpeg")
+    assert first.headers["x-image-cache"] == "MISS"
+    assert second.headers["x-image-cache"] == "HIT"
+    assert len(calls) == 1
+
+
+def test_thumbnail_missing_lot_or_url(client):
+    assert client.get("/lots/missing/thumbnail").status_code == 404
+    assert client.get("/lots/200/thumbnail").status_code == 404
+
+
+def test_thumbnail_rejects_non_allowlisted_host(client):
+    store = SqliteStore(db_path=config.DB_PATH)
+    store.upsert_lot(parse_row(make_row(
+        "300",
+        ImageUrl="https://evil.example/x.png",
+    )))
+    store.commit()
+    store.close()
+    r = client.get("/lots/300/thumbnail")
+    assert r.status_code == 422
+
+
+def test_thumbnail_disabled_returns_503(client, monkeypatch):
+    monkeypatch.setattr(config, "IMAGE_CACHE_ENABLED", False, raising=False)
+    import iaai_scraper.api as api
+    importlib.reload(api)
+    r = TestClient(api.app).get("/lots/100/thumbnail")
+    assert r.status_code == 503
 
 
 def test_lots_cursor_pagination_is_stable(client):

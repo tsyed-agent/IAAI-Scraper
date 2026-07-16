@@ -19,8 +19,16 @@ def _make_client(monkeypatch, tmp_path, *, token: str | None = TOKEN, require: s
     monkeypatch.setenv("IAAI_REQUIRE_AUTH", require)
     monkeypatch.delenv("IAAI_COMMAND_TOKEN", raising=False)
     monkeypatch.setattr(config, "DB_PATH", db, raising=False)
+    monkeypatch.setattr(config, "IMAGE_CACHE_DIR", tmp_path / "image_cache", raising=False)
+    monkeypatch.setattr(config, "IMAGE_CACHE_ENABLED", True, raising=False)
+    monkeypatch.setattr(
+        config, "IMAGE_ALLOWED_HOSTS", frozenset({"anvis.iaai.com"}), raising=False,
+    )
     store = SqliteStore(db_path=db)
-    store.upsert_lot(parse_row(make_row("100")))
+    store.upsert_lot(parse_row(make_row(
+        "100",
+        ImageUrl="https://anvis.iaai.com/thumbnail?imageKeys=100",
+    )))
     store.commit()
     store.close()
     import iaai_scraper.auth as auth_mod
@@ -103,6 +111,17 @@ def test_command_only_token_protects_crawl(monkeypatch, tmp_path):
     monkeypatch.setenv("IAAI_COMMAND_TOKEN", "command-only-secret")
     assert client.get("/lots").status_code == 200
     assert client.post("/commands/crawl", json={}).status_code == 401
+
+
+def test_thumbnail_accepts_api_key_query(authed_client, monkeypatch):
+    monkeypatch.setattr(
+        "iaai_scraper.images._default_fetch",
+        lambda url, timeout_s: (b"\xff\xd8\xffx", "image/jpeg"),
+    )
+    assert authed_client.get("/lots/100/thumbnail").status_code == 401
+    r = authed_client.get(f"/lots/100/thumbnail?api_key={TOKEN}")
+    assert r.status_code == 200
+    assert r.headers["x-image-cache"] == "MISS"
 
 
 def test_startup_fails_when_auth_required_without_token(monkeypatch, tmp_path):
