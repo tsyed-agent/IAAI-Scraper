@@ -147,6 +147,8 @@ IMAGE_ALLOWED_HOSTS = frozenset(
 IMAGE_CACHE_CONTROL = os.getenv(
     "IAAI_IMAGE_CACHE_CONTROL", "public, max-age=86400"
 )
+# Signed thumbnail URL lifetime (seconds) for <img src> without embedding the API token.
+MEDIA_URL_TTL_S = _env_int("IAAI_MEDIA_URL_TTL", 900)
 
 
 @dataclass

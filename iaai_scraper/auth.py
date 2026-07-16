@@ -3,17 +3,24 @@
 When enabled, every route except ``GET /healthz`` requires a valid token via
 ``Authorization: Bearer <token>`` or ``X-API-Key: <token>``.
 
+Thumbnail routes also accept short-lived HMAC-signed query params
+(``?expires=&sig=``) so ``<img src>`` works without embedding the long-lived
+API token. ``?api_key=`` remains accepted for one release (deprecated).
+
 Set ``IAAI_API_TOKEN`` to the secret. Set ``IAAI_REQUIRE_AUTH=true`` (Docker
 default) to reject startup and all requests without a token.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
 import secrets
-from typing import Optional
+import time
+from typing import Optional, Union
 
-from fastapi import Header, HTTPException, Query
+from fastapi import Header, HTTPException, Query, Request
 
 log = logging.getLogger("iaai.auth")
 
@@ -101,19 +108,104 @@ def require_api_auth(
     verify_request_token(authorization, x_api_key)
 
 
+def sign_media_path(
+    path: str,
+    expires_at: int,
+    *,
+    key: Optional[str] = None,
+) -> str:
+    """HMAC-SHA256 hex digest over ``{path}:{expires_at}`` using the API token."""
+    secret = (key if key is not None else api_token()) or ""
+    if not secret:
+        raise ValueError("cannot sign media path without IAAI_API_TOKEN")
+    msg = f"{path}:{int(expires_at)}".encode()
+    return hmac.new(secret.encode(), msg, hashlib.sha256).hexdigest()
+
+
+def verify_media_signature(
+    path: str,
+    expires_at: Union[int, str, None],
+    signature: Optional[str],
+    *,
+    key: Optional[str] = None,
+    now: Optional[float] = None,
+) -> bool:
+    """True when signature matches and ``expires_at`` is still in the future."""
+    if signature is None or expires_at is None:
+        return False
+    try:
+        exp = int(expires_at)
+    except (TypeError, ValueError):
+        return False
+    if exp <= int(now if now is not None else time.time()):
+        return False
+    try:
+        expected = sign_media_path(path, exp, key=key)
+    except ValueError:
+        return False
+    return secrets.compare_digest(expected, signature)
+
+
+def media_signed_href(path: str, *, ttl_s: Optional[int] = None) -> str:
+    """Build ``path?expires=…&sig=…`` when API auth is on; else bare path."""
+    from . import config
+
+    token = api_token()
+    if not token or not require_auth_enabled():
+        return path
+    ttl = int(ttl_s if ttl_s is not None else config.MEDIA_URL_TTL_S)
+    expires_at = int(time.time()) + max(ttl, 1)
+    sig = sign_media_path(path, expires_at, key=token)
+    return f"{path}?expires={expires_at}&sig={sig}"
+
+
 def require_api_auth_flexible(
+    request: Request,
     authorization: Optional[str] = Header(None),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
     api_key: Optional[str] = Query(
         None,
-        description="Optional token for <img src> (thumbnail route only)",
+        description="Deprecated: long-lived token for <img src>; prefer expires+sig",
+    ),
+    expires: Optional[int] = Query(
+        None,
+        description="Unix expiry for signed media URL (thumbnail route)",
+    ),
+    sig: Optional[str] = Query(
+        None,
+        description="HMAC signature for signed media URL (thumbnail route)",
     ),
 ) -> None:
-    """Like ``require_api_auth`` but also accepts ``?api_key=`` for media URLs."""
+    """Auth for media: header token, signed ``expires``+``sig``, or deprecated ``api_key``."""
     if not require_auth_enabled():
         return
-    # Prefer headers; fall back to query so browsers can load authenticated images.
-    verify_request_token(authorization, x_api_key or api_key)
+
+    expected = api_token()
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="API auth misconfigured: IAAI_API_TOKEN is not set",
+        )
+
+    provided = _extract_token(authorization, x_api_key or api_key)
+    if provided and secrets.compare_digest(provided, expected):
+        return
+
+    if expires is not None or sig:
+        if verify_media_signature(request.url.path, expires, sig, key=expected):
+            return
+        raise HTTPException(
+            status_code=401,
+            detail="invalid or expired media signature",
+        )
+
+    if provided:
+        raise HTTPException(status_code=403, detail="invalid API token")
+    raise HTTPException(
+        status_code=401,
+        detail="missing API token or media signature "
+        "(use Authorization / X-API-Key, or ?expires=&sig=)",
+    )
 
 
 def require_command_auth(

@@ -187,7 +187,7 @@ doc 09 staging (PR #6) ──┘
 - [x] 0.5c Stale-on-error: serve last good thumb when refetch fails
 - [x] 0.5d Eviction: `evict()`/`sweep()` — removed lots + TTL sweep at API startup (`IAAI_IMAGE_CACHE_TTL`)
 - [x] 0.6a Access-log `api_key` redaction (`logging_utils.AccessLogTokenRedactor` on `uvicorn.access`)
-- [ ] 0.6b Signed short-lived media URLs to replace `?api_key=` before UI GA
+- [x] 0.6b Signed short-lived media URLs (`?expires=&sig=` on `thumbnail_href`)
 - [ ] Optional: post-crawl warmer for first-page active-lot thumbs (no cold miss on default view)
 
 ### Phase 2 — Production P0

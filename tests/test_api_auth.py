@@ -124,6 +124,63 @@ def test_thumbnail_accepts_api_key_query(authed_client, monkeypatch):
     assert r.headers["x-image-cache"] == "MISS"
 
 
+def test_lots_thumbnail_href_is_signed(authed_client):
+    r = authed_client.get("/lots/100", headers={"Authorization": f"Bearer {TOKEN}"})
+    assert r.status_code == 200
+    href = r.json()["thumbnail_href"]
+    assert href.startswith("/lots/100/thumbnail?expires=")
+    assert "&sig=" in href
+
+
+def test_thumbnail_accepts_valid_signed_url(authed_client, monkeypatch):
+    monkeypatch.setattr(
+        "iaai_scraper.images._default_fetch",
+        lambda url, timeout_s: (b"\xff\xd8\xffx", "image/jpeg"),
+    )
+    lot = authed_client.get("/lots/100", headers={"Authorization": f"Bearer {TOKEN}"})
+    href = lot.json()["thumbnail_href"]
+    r = authed_client.get(href)  # no Authorization header
+    assert r.status_code == 200
+
+
+def test_thumbnail_rejects_expired_signature(authed_client, monkeypatch):
+    from iaai_scraper.auth import sign_media_path
+
+    monkeypatch.setattr(
+        "iaai_scraper.images._default_fetch",
+        lambda url, timeout_s: (b"\xff\xd8\xffx", "image/jpeg"),
+    )
+    path = "/lots/100/thumbnail"
+    expires = 1_700_000_000  # firmly in the past relative to 2026
+    sig = sign_media_path(path, expires, key=TOKEN)
+    r = authed_client.get(f"{path}?expires={expires}&sig={sig}")
+    assert r.status_code == 401
+
+
+def test_thumbnail_rejects_tampered_signature(authed_client, monkeypatch):
+    monkeypatch.setattr(
+        "iaai_scraper.images._default_fetch",
+        lambda url, timeout_s: (b"\xff\xd8\xffx", "image/jpeg"),
+    )
+    lot = authed_client.get("/lots/100", headers={"Authorization": f"Bearer {TOKEN}"})
+    href = lot.json()["thumbnail_href"]
+    # Flip last hex nibble of the signature
+    bad = href[:-1] + ("0" if href[-1] != "0" else "1")
+    assert authed_client.get(bad).status_code == 401
+
+
+def test_sign_media_path_round_trip():
+    from iaai_scraper.auth import sign_media_path, verify_media_signature
+
+    path = "/lots/100/thumbnail"
+    expires = 2_000_000_000
+    sig = sign_media_path(path, expires, key="sekrit")
+    assert verify_media_signature(path, expires, sig, key="sekrit", now=expires - 10)
+    assert not verify_media_signature(path, expires, sig, key="sekrit", now=expires + 1)
+    assert not verify_media_signature(path, expires, "deadbeef", key="sekrit", now=expires - 10)
+    assert not verify_media_signature("/lots/999/thumbnail", expires, sig, key="sekrit", now=expires - 10)
+
+
 def test_readyz_public_env_allows_unauthenticated_probe(monkeypatch, tmp_path):
     client = _make_client(monkeypatch, tmp_path)
     assert client.get("/readyz").status_code == 401

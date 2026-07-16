@@ -12,7 +12,8 @@ Commands (same process, shared crawler logic):
 
 Authentication (when ``IAAI_REQUIRE_AUTH`` is enabled or ``IAAI_API_TOKEN`` is set):
   All routes except ``GET /healthz`` require ``Authorization: Bearer <token>``
-  or ``X-API-Key: <token>``. Thumbnail also accepts ``?api_key=`` for ``<img src>``.
+  or ``X-API-Key: <token>``. Thumbnail also accepts short-lived ``?expires=&sig=``
+  (preferred for ``<img src>``) or deprecated ``?api_key=``.
   Set ``IAAI_API_TOKEN`` in production / Docker.
 """
 from __future__ import annotations
@@ -31,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from . import config
 from .auth import (
+    media_signed_href,
     require_api_auth,
     require_api_auth_flexible,
     require_command_auth,
@@ -104,9 +106,10 @@ def _hydrate(row: dict[str, Any], *, include_raw: bool = False) -> dict[str, Any
         if row.get(b) is not None:
             row[b] = bool(row[b])
     # Stable local pointer for the UI; crawl still only stores image_url text.
+    # When auth is configured, embed a short-lived HMAC so <img> needs no header.
     stock = row.get("stock_number")
     if stock and row.get("image_url"):
-        row["thumbnail_href"] = f"/lots/{stock}/thumbnail"
+        row["thumbnail_href"] = media_signed_href(f"/lots/{stock}/thumbnail")
     else:
         row["thumbnail_href"] = None
     return row

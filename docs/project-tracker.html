@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-updated="2026-07-16T20:45">
+<html lang="en" data-updated="2026-07-16T21:00">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -290,7 +290,7 @@
       </p>
       <div class="meta">
         <span class="pill">Updated <strong id="board-updated">2026-07-16</strong></span>
-        <span class="pill">Current: Phase 0</span>
+        <span class="pill">Current: Phase 0 (Task 12 container verify)</span>
         <a href="./handoffs/2026-07-16-phase0-handoff.md">Handoff</a>
         <a href="./09-enterprise-hardening-plan.md">Plan 09</a>
         <a href="./10-implementation-plan.md">Plan 10</a>
@@ -320,7 +320,7 @@
         </div>
         <div class="card">
           <h3>Now</h3>
-          <p>Finish Phase 0 (signed media URLs, container crawl). Then Phase 2 P0 gates (scheduler, off-host backups).</p>
+          <p>Phase 0 code done except Task 12 (authorized in-container crawl). Then Phase 2 P0 gates (scheduler, off-host backups).</p>
         </div>
       </div>
     </header>
@@ -452,7 +452,7 @@
           </div>
         </details>
 
-        <details class="task" data-status="open" data-id="0.6b">
+        <details class="task" data-status="completed" data-id="0.6b">
           <summary>
             <span class="check"></span>
             <span class="task-n">Task 7</span>
@@ -460,11 +460,18 @@
               <span class="task-name">Signed short-lived media URLs</span>
               <span class="task-ref">plan 0.6b · Handoff C · auth HMAC</span>
             </span>
-            <span class="tags"><span class="tag open">open</span></span>
+            <span class="tags"><span class="tag completed">completed</span></span>
           </summary>
           <div class="task-body">
             <h4>Acceptance</h4>
-            <p><code>thumbnail_href</code> gets <code>?expires=&amp;sig=</code>; header token still works; deprecate <code>?api_key=</code> after one release.</p>
+            <p><code>thumbnail_href</code> gets <code>?expires=&amp;sig=</code>; header token still works; <code>?api_key=</code> deprecated but accepted.</p>
+            <h4>PR / commits</h4>
+            <p><code>codex/phase0-signed-media-urls</code> — push/PR pending (gh auth expired)</p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
+              <p>HMAC media URLs + auth tests; 132 pytest green.</p></li>
+            </ul>
           </div>
         </details>
 

@@ -66,6 +66,22 @@ def test_access_log_redactor_handles_uvicorn_style_tuple():
     assert "/lots/100/thumbnail?api_key=REDACTED" in formatted
 
 
+def test_access_log_redactor_scrubs_sig_query():
+    record = logging.LogRecord(
+        name="uvicorn.access",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg='%s - "%s"',
+        args=("127.0.0.1:9", "GET /lots/100/thumbnail?expires=9&sig=abcd1234 HTTP/1.1"),
+        exc_info=None,
+    )
+    AccessLogTokenRedactor().filter(record)
+    formatted = _format(record)
+    assert "abcd1234" not in formatted
+    assert "sig=REDACTED" in formatted
+
+
 def test_install_access_log_redaction_is_idempotent():
     name = "test.uvicorn.access.redaction"
     logger = logging.getLogger(name)
