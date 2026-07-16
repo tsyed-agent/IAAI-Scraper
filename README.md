@@ -9,7 +9,7 @@ on-demand thumbnail caching for the UI is specified in
 [`docs/10-implementation-plan.md`](docs/10-implementation-plan.md).
 
 > Status: **hardened staging baseline.** Captured-data tests, migrations, raw
-> replay audits, and API tests pass. Production launch still requires the legal,
+> replay audits, and API tests pass. Production launch still requires the
 > backup/restore, gateway, observability, and authorized-live-canary gates in
 > [`docs/09-enterprise-hardening-plan.md`](docs/09-enterprise-hardening-plan.md).
 > Next implementation work is sequenced in
@@ -87,6 +87,9 @@ CLI shortcuts (same logic, for ops without HTTP):
 python -m iaai_scraper.cli crawl            # sync via CLI (blocking)
 python -m iaai_scraper.cli stats            # DB statistics
 python -m iaai_scraper.cli backup           # atomic snapshot under data/backups/
+python -m iaai_scraper.cli offsite-backup   # upload DB+raw + SHA-256 manifest
+python -m iaai_scraper.cli restore-drill    # prove off-host snapshot restores
+
 python scripts/verify_ontario_crawl.py     # verify last crawl invariants
 python scripts/audit_raw_coverage.py data/raw/**/*.jsonl.gz  # offline field/completeness audit
 scripts/scheduled_crawl.sh                 # cron entrypoint: crawl + one retry (see docs/ops-scheduling.md)
@@ -175,9 +178,10 @@ completeness checks), usage, results, and limitations are documented in
 | [`docs/09-enterprise-hardening-plan.md`](docs/09-enterprise-hardening-plan.md) | **Production gates, target architecture, testing, SLOs, and multi-source roadmap.** |
 | [`docs/10-implementation-plan.md`](docs/10-implementation-plan.md) | **Actionable next plan: media pointers/cache, UI boundary, remaining P0/P1 tasks.** |
 | [`docs/ops-scheduling.md`](docs/ops-scheduling.md) | Cron/systemd crawl schedule + `scheduled_crawl.sh` retry wrapper. |
+| [`docs/ops-backup.md`](docs/ops-backup.md) | Off-host backup upload + restore drill. |
 | [`docs/project-tracker.html`](docs/project-tracker.html) | **Living HTML status board** (phases, tasks, tags, agent comments, PR links). |
 | [`docs/project-tracker.md`](docs/project-tracker.md) | How agents must update the tracker (short). |
-| [`docs/handoffs/2026-07-16-phase0-phase2-handoff.md`](docs/handoffs/2026-07-16-phase0-phase2-handoff.md) | **Latest handoff** (merge #8→#9, next = off-host backups). |
+| [`docs/handoffs/2026-07-16-phase0-phase2-handoff.md`](docs/handoffs/2026-07-16-phase0-phase2-handoff.md) | Evening handoff (PRs #8/#9); next after backups = TLS gateway. |
 
 ## Project layout
 

@@ -3,6 +3,9 @@
   python -m iaai_scraper.cli crawl            # run a full Ontario crawl
   python -m iaai_scraper.cli crawl --max-pages 3   # limited test crawl
   python -m iaai_scraper.cli stats            # show DB stats
+  python -m iaai_scraper.cli backup           # local atomic SQLite snapshot
+  python -m iaai_scraper.cli offsite-backup   # upload snapshot + manifest off-host
+  python -m iaai_scraper.cli restore-drill    # download + integrity/lot-count check
   python -m iaai_scraper.cli serve            # run the read API
 """
 from __future__ import annotations
@@ -10,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -18,6 +22,13 @@ import typer
 
 from . import config
 from .crawler import Crawler
+from .offsite_backup import (
+    DEFAULT_KEEP_LOCAL_DB,
+    DEFAULT_RAW_HOT_DAYS,
+    object_store_from_env,
+    run_offsite_backup,
+    run_restore_drill,
+)
 from .storage import SqliteStore, backup_sqlite
 
 app = typer.Typer(add_completion=False, help="IAAI Ontario scraper")
@@ -91,6 +102,92 @@ def backup(
         destination = config.DATA_DIR / "backups" / f"iaai-ontario-{stamp}.db"
     path = backup_sqlite(config.DB_PATH, destination)
     typer.echo(str(path))
+
+
+@app.command("offsite-backup")
+def offsite_backup(
+    backend: Optional[str] = typer.Option(
+        None,
+        "--backend",
+        help="filesystem|s3 (default: IAAI_BACKUP_BACKEND or filesystem)",
+    ),
+    backup_dir: Optional[Path] = typer.Option(
+        None,
+        "--backup-dir",
+        help="filesystem object-store root (IAAI_BACKUP_DIR)",
+    ),
+    keep_local_db: int = typer.Option(
+        DEFAULT_KEEP_LOCAL_DB,
+        "--keep-local-db",
+        min=0,
+        help="local DB backups to retain after upload",
+    ),
+    raw_hot_days: int = typer.Option(
+        DEFAULT_RAW_HOT_DAYS,
+        "--raw-hot-days",
+        min=0,
+        help="local raw JSONL hot window (days)",
+    ),
+    skip_fresh_snapshot: bool = typer.Option(
+        False,
+        "--skip-fresh-snapshot",
+        help="reuse latest local DB backup instead of creating a new one",
+    ),
+) -> None:
+    """Upload latest DB (+ newest raw) to versioned object storage with manifest."""
+    store = object_store_from_env(backend=backend, filesystem_root=backup_dir)
+    report = run_offsite_backup(
+        config.DATA_DIR,
+        store,
+        db_path=config.DB_PATH,
+        create_fresh_snapshot=not skip_fresh_snapshot,
+        keep_local_db=keep_local_db,
+        raw_hot_days=raw_hot_days,
+    )
+    typer.echo(json.dumps(report, indent=2, default=str))
+
+
+@app.command("restore-drill")
+def restore_drill(
+    backend: Optional[str] = typer.Option(
+        None,
+        "--backend",
+        help="filesystem|s3 (default: IAAI_BACKUP_BACKEND or filesystem)",
+    ),
+    backup_dir: Optional[Path] = typer.Option(
+        None,
+        "--backup-dir",
+        help="filesystem object-store root (IAAI_BACKUP_DIR)",
+    ),
+    min_lots: int = typer.Option(
+        1,
+        "--min-lots",
+        min=0,
+        help="fail if restored lot count is below this floor",
+    ),
+    snapshot_id: Optional[str] = typer.Option(
+        None,
+        "--snapshot-id",
+        help="specific snapshot; default reads latest.json",
+    ),
+    restore_dir: Optional[Path] = typer.Option(
+        None,
+        "--restore-dir",
+        help="directory for downloaded artifacts (default: temp)",
+    ),
+) -> None:
+    """Download latest off-host snapshot and prove integrity + lot-count floor."""
+    store = object_store_from_env(backend=backend, filesystem_root=backup_dir)
+    dest = restore_dir or Path(tempfile.mkdtemp(prefix="iaai-restore-"))
+    result = run_restore_drill(
+        store,
+        dest,
+        min_lots=min_lots,
+        snapshot_id=snapshot_id,
+    )
+    typer.echo(json.dumps(result.as_dict(), indent=2, default=str))
+    if not result.ok:
+        raise typer.Exit(code=1)
 
 
 @app.command()
