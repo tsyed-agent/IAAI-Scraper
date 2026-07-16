@@ -118,6 +118,7 @@ def test_archive_missing_only_touches_active(tmp_path):
     store.upsert_lot(parse_row(make_row("5006", ItemStatusDesc="")))
     store.upsert_lot(parse_row(make_row("5007", ItemStatusDesc="Sold", HighPrebidValue=900)))
 
+    assert store.archive_missing({"5005"}) == 0
     n = store.archive_missing({"5005"})
     assert n == 1
     assert store.get_lot("5005")["status"] == "active"

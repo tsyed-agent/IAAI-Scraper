@@ -11,7 +11,7 @@ Manual investigation via `spike/collect_lot_samples.py` (Playwright in-page fetc
 ## RunList size
 
 - **100 keys** per row in `RunList`.
-- Current parser maps **35** fields into `Lot`; **65** keys are only in `Lot.raw`.
+- Parser maps **~54** fields into `Lot` (as of 2026-06-26); **~46** buyer-session / UI keys remain in `Lot.raw` only.
 
 ## Lifecycle / status fields (confirmed live)
 
