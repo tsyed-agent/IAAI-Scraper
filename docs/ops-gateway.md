@@ -77,8 +77,13 @@ Optional IP allowlist is commented in the nginx config (`geo $iaai_allow`).
    crawl via `docker compose exec` / CLI on the host with a mounted data dir.
 3. Tune `rate=` / `burst=` under expected BFF load; add WAF/CDN upstream if the
    edge is internet-facing.
-4. External abuse / load tests remain an ops checklist item after this sample is
-   deployed — they are not automated in CI.
+4. External abuse / load tests: run offline CI check anytime; live edge when up:
+
+```bash
+scripts/gateway_abuse_check.sh                          # offline (CI)
+IAAI_GATEWAY_BASE=https://127.0.0.1:8443 \
+  IAAI_API_TOKEN=… scripts/gateway_abuse_check.sh       # live rate/404/body
+```
 
 ## Files
 

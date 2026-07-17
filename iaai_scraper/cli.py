@@ -35,6 +35,7 @@ from .offsite_backup import (
 )
 from .raw_backfill import run_raw_backfill
 from .storage import SqliteStore, backup_sqlite
+from .thumb_warmer import warm_active_thumbs
 from .worker import DurableWorker, JobQueue, default_jobs_db_path
 
 app = typer.Typer(add_completion=False, help="IAAI Ontario scraper")
@@ -68,6 +69,14 @@ def crawl(
         False, "--canada-wide", help="legacy: crawl all Canada and filter client-side",
     ),
     enrich: bool = typer.Option(config.ENRICH_DETAILS, help="fetch detail pages too"),
+    warm_thumbs: bool = typer.Option(
+        False,
+        "--warm-thumbs/--no-warm-thumbs",
+        help="after a successful crawl, prefetch first-page active thumbs (or set IAAI_WARM_THUMBS=1)",
+    ),
+    warm_limit: int = typer.Option(
+        50, "--warm-limit", min=1, help="max active lots to warm when --warm-thumbs",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Run a full Ontario crawl and write to the DB + raw JSONL."""
@@ -91,6 +100,12 @@ def crawl(
     # mistaken for a successful scheduled crawl.
     if report.status != "completed":
         raise typer.Exit(code=1)
+    do_warm = warm_thumbs or os.getenv("IAAI_WARM_THUMBS", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+    if do_warm:
+        warm = warm_active_thumbs(limit=warm_limit)
+        typer.echo(json.dumps(warm.as_dict(), indent=2, default=str))
 
 
 @app.command()
@@ -332,6 +347,18 @@ def worker(
                 _time.sleep(poll_s)
     finally:
         w.close()
+
+
+@app.command("warm-thumbs")
+def warm_thumbs_cmd(
+    limit: int = typer.Option(50, min=0, help="max active lots to warm (default first page size)"),
+    workers: int = typer.Option(4, min=1, help="parallel fetch workers"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Prefetch thumbnail cache for active lots (offline vs IAAI HTML; hits image CDN)."""
+    _setup_logging(verbose)
+    report = warm_active_thumbs(limit=limit, workers=workers)
+    typer.echo(json.dumps(report.as_dict(), indent=2, default=str))
 
 
 @app.command()
