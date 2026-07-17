@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-updated="2026-07-16T23:20">
+<html lang="en" data-updated="2026-07-17T02:30">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -290,7 +290,7 @@
       </p>
       <div class="meta">
         <span class="pill">Updated <strong id="board-updated">2026-07-16</strong></span>
-        <span class="pill">Current: Phase 2 Task 2 backups → Task 3 TLS gateway</span>
+        <span class="pill">Current: Phase 2 Task 3 TLS gateway / 2.4b worker</span>
         <a href="./handoffs/2026-07-16-phase0-phase2-handoff.md">Handoff (latest)</a>
         <a href="./handoffs/2026-07-16-phase0-handoff.md">Handoff (morning)</a>
         <a href="./09-enterprise-hardening-plan.md">Plan 09</a>
@@ -321,7 +321,7 @@
         </div>
         <div class="card">
           <h3>Now</h3>
-          <p>Phase 2 scheduler + off-host backups landed. Next: TLS gateway (2.3). Phase 0 Task 12 still needs authorized in-container crawl verify.</p>
+          <p>Live canary (2.5) passed 3/3 into isolated data dir. Next P0: TLS gateway (2.3) or durable worker (2.4b). Phase 0 Task 12 still needs authorized in-container crawl verify.</p>
         </div>
       </div>
     </header>
@@ -762,7 +762,7 @@
           </div>
         </details>
 
-        <details class="task" data-status="open" data-id="2.5">
+        <details class="task" data-status="completed" data-id="2.5">
           <summary>
             <span class="check"></span>
             <span class="task-n">Task 5</span>
@@ -770,9 +770,19 @@
               <span class="task-name">Authorized 3-run live canary</span>
               <span class="task-ref">doc 10 · 2.5 · data QA</span>
             </span>
-            <span class="tags"><span class="tag open">open</span> <span class="tag blocking">blocking</span></span>
+            <span class="tags"><span class="tag completed">completed</span></span>
           </summary>
-          <div class="task-body"><p>Exact totals/branches/prices vs source; never against prod DB.</p></div>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p>Exact totals/branches/prices vs source; never against prod DB.</p>
+            <h4>Evidence</h4>
+            <p><code>data/canary/2026-07-17T0230Z/</code> · 3/3 completed · 1266/1266 match · branches stable · 0 bad rows</p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
+              <p>Portable e2e script + floor 1000; 3 isolated live runs passed (30s/25s/16s). Prod <code>data/</code> untouched.</p></li>
+            </ul>
+          </div>
         </details>
 
         <details class="task" data-status="open" data-id="2.6">

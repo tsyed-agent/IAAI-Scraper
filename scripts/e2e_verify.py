@@ -53,6 +53,13 @@ def verify_run(run_num: int) -> dict:
             "SELECT status, COUNT(*) AS cnt FROM lots GROUP BY status ORDER BY status"
         )
     }
+    branch_counts = [
+        dict(row)
+        for row in conn.execute(
+            "SELECT branch_id, branch_name, COUNT(*) AS cnt FROM lots "
+            "GROUP BY branch_id ORDER BY cnt DESC"
+        )
+    ]
     ontario_db = conn.execute("SELECT COUNT(*) AS n FROM lots").fetchone()["n"]
     if ontario_db != ontario_seen:
         anomalies.append(
@@ -129,6 +136,7 @@ def verify_run(run_num: int) -> dict:
         "archived": run.get("archived"),
         "pages": run.get("pages"),
         "lots_by_status": status_counts,
+        "lots_by_branch": branch_counts,
         "readyz": readyz["body"],
         "spot_checks": spot_checks,
         "anomalies": anomalies,
