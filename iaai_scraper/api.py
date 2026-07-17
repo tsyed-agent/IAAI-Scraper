@@ -10,10 +10,15 @@ Commands (same process, shared crawler logic):
   POST /commands/crawl        — start Ontario sync (background)
   GET  /commands/crawl/status — poll crawl job status
 
+Storefront:
+  GET /ui/                    — Yardline React catalog (static build)
+  GET /                       — redirects to /ui/
+
 Authentication (when ``IAAI_REQUIRE_AUTH`` is enabled or ``IAAI_API_TOKEN`` is set):
-  All routes except ``GET /healthz`` require ``Authorization: Bearer <token>``
-  or ``X-API-Key: <token>``. Thumbnail also accepts short-lived ``?expires=&sig=``
-  (preferred for ``<img src>``) or deprecated ``?api_key=``.
+  All routes except ``GET /healthz`` and the static ``/ui`` assets require
+  ``Authorization: Bearer <token>`` or ``X-API-Key: <token>``. Thumbnail also
+  accepts short-lived ``?expires=&sig=`` (preferred for ``<img src>``) or
+  deprecated ``?api_key=``.
   Set ``IAAI_API_TOKEN`` in production / Docker.
 
 Schema versioning: every response includes ``X-API-Version: v1``. Typed response
@@ -28,9 +33,12 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -102,10 +110,14 @@ app = FastAPI(
         "Query scraped Ontario lots and run crawl commands through one API. "
         f"Response schema version **{API_SCHEMA_VERSION}** "
         f"(header ``X-API-Version: {API_SCHEMA_VERSION}``). "
-        "Deprecation policy: docs/api-versioning.md."
+        "Deprecation policy: docs/api-versioning.md. "
+        "Storefront UI: ``GET /ui/`` (Yardline)."
     ),
     lifespan=_lifespan,
 )
+
+# Built React storefront (``ui/`` → ``iaai_scraper/static/ui`` via ``npm run build``).
+_UI_DIR = Path(__file__).resolve().parent / "static" / "ui"
 
 
 class _ApiVersionMiddleware(BaseHTTPMiddleware):
@@ -583,3 +595,17 @@ def get_status_history(
         }
     finally:
         store.close()
+
+
+@app.get("/", include_in_schema=False)
+def root_redirect() -> RedirectResponse:
+    """Send operators to the Yardline storefront."""
+    return RedirectResponse(url="/ui/", status_code=307)
+
+
+if _UI_DIR.is_dir():
+    app.mount(
+        "/ui",
+        StaticFiles(directory=str(_UI_DIR), html=True),
+        name="ui",
+    )

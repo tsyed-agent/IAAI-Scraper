@@ -27,5 +27,9 @@ spike/out/
 # Local agent tooling (Codex role configs)
 .codex/
 
+# Frontend toolchain (built assets live in iaai_scraper/static/ui/)
+ui/node_modules/
+ui/dist/
+
 # OS
 .DS_Store
