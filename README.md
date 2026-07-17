@@ -88,6 +88,7 @@ python -m iaai_scraper.cli crawl            # sync via CLI (blocking)
 python -m iaai_scraper.cli stats            # DB statistics
 python -m iaai_scraper.cli backup           # atomic snapshot under data/backups/
 python -m iaai_scraper.cli offsite-backup   # upload DB+raw + SHA-256 manifest
+python -m iaai_scraper.cli backfill-raw     # replay surviving raw JSONL into SQLite (offline)
 python -m iaai_scraper.cli restore-drill    # prove off-host snapshot restores
 
 python scripts/verify_ontario_crawl.py     # verify last crawl invariants
@@ -179,6 +180,7 @@ completeness checks), usage, results, and limitations are documented in
 | [`docs/10-implementation-plan.md`](docs/10-implementation-plan.md) | **Actionable next plan: media pointers/cache, UI boundary, remaining P0/P1 tasks.** |
 | [`docs/ops-scheduling.md`](docs/ops-scheduling.md) | Cron/systemd crawl schedule + `scheduled_crawl.sh` retry wrapper. |
 | [`docs/ops-backup.md`](docs/ops-backup.md) | Off-host backup upload + restore drill. |
+| [`docs/ops-backfill.md`](docs/ops-backfill.md) | Offline raw JSONL → SQLite baseline backfill. |
 | [`docs/project-tracker.html`](docs/project-tracker.html) | **Living HTML status board** (phases, tasks, tags, agent comments, PR links). |
 | [`docs/project-tracker.md`](docs/project-tracker.md) | How agents must update the tracker (short). |
 | [`docs/handoffs/2026-07-16-phase0-phase2-handoff.md`](docs/handoffs/2026-07-16-phase0-phase2-handoff.md) | Evening handoff (PRs #8/#9); next after backups = TLS gateway. |

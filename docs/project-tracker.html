@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-updated="2026-07-16T23:20">
+<html lang="en" data-updated="2026-07-17T02:50">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -775,7 +775,7 @@
           <div class="task-body"><p>Exact totals/branches/prices vs source; never against prod DB.</p></div>
         </details>
 
-        <details class="task" data-status="open" data-id="2.6">
+        <details class="task" data-status="completed" data-id="2.6">
           <summary>
             <span class="check"></span>
             <span class="task-n">Task 6</span>
@@ -783,8 +783,19 @@
               <span class="task-name">Raw baseline backfill from surviving archives</span>
               <span class="task-ref">doc 09 Phase B remainder</span>
             </span>
-            <span class="tags"><span class="tag open">open</span></span>
+            <span class="tags"><span class="tag completed">completed</span></span>
           </summary>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p>Offline <code>backfill-raw</code> replays JSONL/JSONL.gz via <code>parse_row</code> → <code>upsert_lot</code>; records <code>crawl_runs.run_type=backfill</code>; DLQ unless <code>--strict</code>.</p>
+            <h4>PR / commits</h4>
+            <p><code>cursor/phase2-raw-backfill</code> · <code>iaai_scraper/raw_backfill.py</code> · <code>docs/ops-backfill.md</code></p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
+              <p>CLI <code>backfill-raw</code> + offline fixture tests; no network / no live crawl.</p></li>
+            </ul>
+          </div>
         </details>
 
         <details class="task" data-status="open" data-id="2.7">
