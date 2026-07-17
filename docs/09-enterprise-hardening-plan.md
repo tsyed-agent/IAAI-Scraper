@@ -132,13 +132,12 @@ on the API hot path or become expensive to retrofit once real history accumulate
 | 0.8 | ✅ done | **Fix `sold_from`/`sold_to` semantics** — they filtered `status_updated_at` for *any* status; now they also require a concluded outcome. | `storage._build_where` | `test_sold_filter_excludes_non_concluded_status_changes`. |
 | 0.9 | ✅ done | **Tie `--canada-wide` page-size default to the flag** (legacy verified max is 100, not 1000). | `cli.py`, `api.CrawlCommand.resolved_page_size` | CLI + API tests cover both modes and explicit override. |
 | 0.10 | ✅ done | **Normalize `StockNum` identically** in duplicate-page detection and the parser (whitespace differences previously defeated the duplicate guard). | `crawler._fetch_page_with_recovery` | str+strip normalization matches `parser._str`. |
-| 0.11 | ◐ partial | **In-container crawl.** Added a `/dev/shm` tmpfs so Chromium has shared memory under `read_only: true`. Live verification of `POST /commands/crawl` inside the container remains open. | `docker-compose.yml` | Crawl completes inside the container (manual check). |
+| 0.11 | ✅ done | **In-container crawl.** Added a `/dev/shm` tmpfs so Chromium has shared memory under `read_only: true`. Live verification of `POST /commands/crawl` inside the container completed via `scripts/verify_in_container_crawl.sh` (2026-07-17). | `docker-compose.yml`, `scripts/verify_in_container_crawl.sh` | Crawl completes inside the container. |
 | 0.12 | ⏳ deferred | Unchanged lots still get a full ~60-column row rewrite (including the raw blob) every crawl; update only `last_seen`/`missing_run_count` on the unchanged path. | `storage.upsert_lot` | Revisit at multi-source scale; harmless at 1.5k lots. |
 
 **Exit:** suite green (132 tests as of 2026-07-16 after 0.6a/0.6b); read path
 proven write-free; redirect, eviction, negative-cache, single-flight, access-log
-redaction, and signed media URL tests pass. Remaining: the 0.11 manual container
-check.
+redaction, and signed media URL tests pass. In-container crawl (0.11) verified 2026-07-17.
 
 ### Phase A — Recovery and correctness baseline ✅ (landed in PR #6)
 

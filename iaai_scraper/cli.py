@@ -35,6 +35,7 @@ from .offsite_backup import (
 )
 from .raw_backfill import run_raw_backfill
 from .storage import SqliteStore, backup_sqlite
+from .thumb_warmer import warm_active_thumbs
 from .worker import DurableWorker, JobQueue, default_jobs_db_path
 
 app = typer.Typer(add_completion=False, help="IAAI Ontario scraper")
@@ -68,6 +69,17 @@ def crawl(
         False, "--canada-wide", help="legacy: crawl all Canada and filter client-side",
     ),
     enrich: bool = typer.Option(config.ENRICH_DETAILS, help="fetch detail pages too"),
+    warm_thumbs: bool = typer.Option(
+        False,
+        "--warm-thumbs/--no-warm-thumbs",
+        help="after a successful crawl, prefetch first-page active thumbs (or set IAAI_WARM_THUMBS=1)",
+    ),
+    warm_limit: Optional[int] = typer.Option(
+        None,
+        "--warm-limit",
+        min=1,
+        help="max active lots to warm (default: IAAI_WARM_THUMBS_LIMIT or 50)",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Run a full Ontario crawl and write to the DB + raw JSONL."""
@@ -91,6 +103,15 @@ def crawl(
     # mistaken for a successful scheduled crawl.
     if report.status != "completed":
         raise typer.Exit(code=1)
+    do_warm = warm_thumbs or os.getenv("IAAI_WARM_THUMBS", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+    if do_warm:
+        limit = warm_limit if warm_limit is not None else _env_int_opt(
+            "IAAI_WARM_THUMBS_LIMIT", 50,
+        )
+        warm = warm_active_thumbs(limit=limit)
+        typer.echo(json.dumps(warm.as_dict(), indent=2, default=str))
 
 
 @app.command()
@@ -332,6 +353,23 @@ def worker(
                 _time.sleep(poll_s)
     finally:
         w.close()
+
+
+@app.command("warm-thumbs")
+def warm_thumbs_cmd(
+    limit: Optional[int] = typer.Option(
+        None,
+        min=0,
+        help="max active lots to warm (default: IAAI_WARM_THUMBS_LIMIT or 50)",
+    ),
+    workers: int = typer.Option(4, min=1, help="parallel fetch workers"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Prefetch thumbnail cache for active lots (offline vs IAAI HTML; hits image CDN)."""
+    _setup_logging(verbose)
+    resolved = limit if limit is not None else _env_int_opt("IAAI_WARM_THUMBS_LIMIT", 50)
+    report = warm_active_thumbs(limit=resolved, workers=workers)
+    typer.echo(json.dumps(report.as_dict(), indent=2, default=str))
 
 
 @app.command()
