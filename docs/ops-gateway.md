@@ -20,8 +20,11 @@ docker compose -f docker-compose.yml -f docker-compose.gateway.yml up --build -d
 | Loopback API | `http://127.0.0.1:8000` | Ops, `POST /commands/*`, OpenAPI |
 
 Override ports with `IAAI_GATEWAY_HTTPS_PORT` / `IAAI_GATEWAY_HTTP_PORT` /
-`IAAI_API_PORT`. Keep the HTTPS env var in sync with the compose port mapping —
-the gateway runs `envsubst` so HTTP redirects land on the mapped TLS port.
+`IAAI_API_PORT`. Host publish defaults to **loopback only**
+(`IAAI_GATEWAY_BIND=127.0.0.1`); set `IAAI_GATEWAY_BIND=0.0.0.0` only when you
+intentionally expose the edge on all interfaces. Keep the HTTPS env var in sync
+with the compose port mapping — the gateway runs `envsubst` so HTTP redirects
+land on the mapped TLS port.
 
 ```bash
 # Public read (through TLS edge)

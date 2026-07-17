@@ -50,7 +50,11 @@ def test_compose_overlay_publishes_https_and_mounts_config():
     assert "envsubst" in text
     assert "iaai-internal" in text
     # Commands remain on loopback from the base compose — gateway is HTTPS edge.
-    assert re.search(r"ports:\s*\n\s*-\s*\"\$\{IAAI_GATEWAY_HTTP_PORT", text)
+    # Default bind is loopback; ports still overrideable via IAAI_GATEWAY_*_PORT.
+    assert 'IAAI_GATEWAY_BIND:-127.0.0.1' in text
+    assert "${IAAI_GATEWAY_HTTP_PORT:-8080}:80" in text
+    assert "${IAAI_GATEWAY_HTTPS_PORT:-8443}:443" in text
+    assert "IAAI_GATEWAY_BIND" in OPS_DOC.read_text()
 
 
 def test_ops_doc_and_cert_script_exist():

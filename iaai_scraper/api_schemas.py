@@ -5,7 +5,7 @@ Field names match the current JSON wire format. Clients should treat
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -134,7 +134,8 @@ class LotResponseV1(BaseModel):
     last_changed: Optional[str] = None
     missing_run_count: Optional[int] = None
     # Opt-in via ``?include_raw=true``; omitted from JSON when unset.
-    raw: Optional[dict[str, Any]] = None
+    # Prefer parsed object; keep original string when the stored JSON is invalid.
+    raw: Optional[Union[dict[str, Any], str]] = None
 
 
 class LotsListResponseV1(BaseModel):

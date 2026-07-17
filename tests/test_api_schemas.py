@@ -158,3 +158,15 @@ def test_api_key_query_sends_deprecation_headers(monkeypatch, tmp_path):
     assert r.headers.get("sunset") == API_KEY_QUERY_SUNSET
     assert "api-versioning.md" in r.headers.get("link", "")
     assert r.headers.get("x-api-version") == API_SCHEMA_VERSION
+
+
+def test_lot_response_v1_allows_string_raw():
+    """Invalid stored JSON must remain a string — not a 500 from response_model."""
+    lot = LotResponseV1.model_validate(
+        {"stock_number": "999", "status": "active", "raw": "not-json{{{"}
+    )
+    assert lot.raw == "not-json{{{"
+    parsed = LotResponseV1.model_validate(
+        {"stock_number": "100", "raw": {"StockNum": "100"}}
+    )
+    assert parsed.raw == {"StockNum": "100"}

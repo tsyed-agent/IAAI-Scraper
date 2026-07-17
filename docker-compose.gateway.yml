@@ -22,8 +22,10 @@ services:
       # Must match the host-mapped HTTPS port below (HTTP→HTTPS redirects).
       IAAI_GATEWAY_HTTPS_PORT: ${IAAI_GATEWAY_HTTPS_PORT:-8443}
     ports:
-      - "${IAAI_GATEWAY_HTTP_PORT:-8080}:80"
-      - "${IAAI_GATEWAY_HTTPS_PORT:-8443}:443"
+      # Default loopback-only publish (private API). Override bind for LAN/public:
+      #   IAAI_GATEWAY_BIND=0.0.0.0 docker compose ...
+      - "${IAAI_GATEWAY_BIND:-127.0.0.1}:${IAAI_GATEWAY_HTTP_PORT:-8080}:80"
+      - "${IAAI_GATEWAY_BIND:-127.0.0.1}:${IAAI_GATEWAY_HTTPS_PORT:-8443}:443"
     volumes:
       - ./docker/gateway/nginx.conf.template:/etc/nginx/nginx.conf.template:ro
       - ./docker/gateway/certs:/etc/nginx/certs:ro
