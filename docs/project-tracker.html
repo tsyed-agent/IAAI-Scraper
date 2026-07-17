@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-updated="2026-07-17T03:45">
+<html lang="en" data-updated="2026-07-17T03:50">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -752,6 +752,8 @@
               <p>Nginx sample + compose overlay; blocks /commands and OpenAPI on edge; offline config/cert tests.</p></li>
               <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
               <p>Added <code>scripts/gateway_abuse_check.sh</code> offline CI assertions + optional live rate/404/body checks.</p></li>
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
+              <p>Tightened offline checks: each of /docs, /redoc, /openapi.json needs its own location+404.</p></li>
             </ul>
           </div>
         </details>
@@ -944,6 +946,8 @@
             <ul class="comments">
               <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
               <p><code>iaai_scraper/thumb_warmer.py</code> + <code>cli warm-thumbs</code> / <code>--warm-thumbs</code> / <code>IAAI_WARM_THUMBS</code>.</p></li>
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
+              <p>Fixed warmer sort to auction_date ASC (matches GET /lots); honor IAAI_WARM_THUMBS_LIMIT.</p></li>
             </ul>
           </div>
         </details>

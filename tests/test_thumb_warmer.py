@@ -86,3 +86,39 @@ def test_warm_respects_limit(tmp_path: Path):
     report = warm_active_thumbs(limit=2, db_path=db, cache=cache, workers=2)
     assert report.requested == 2
     assert len(fetches) == 2
+
+
+def test_warm_uses_auction_date_order_like_list_lots(tmp_path: Path):
+    """First-page warmer must match GET /lots default sort (auction_date ASC)."""
+    db = tmp_path / "lots.db"
+    store = SqliteStore(db_path=db)
+    # Later auction date first if we wrongly sort by last_seen DESC.
+    store.upsert_lot(parse_row(make_row(
+        "early",
+        ImageUrl="https://anvis.iaai.com/thumbnail?imageKeys=early",
+        AuctionDate="2026-01-01",
+        ItemStatusDesc="",
+    )))
+    store.upsert_lot(parse_row(make_row(
+        "late",
+        ImageUrl="https://anvis.iaai.com/thumbnail?imageKeys=late",
+        AuctionDate="2026-12-01",
+        ItemStatusDesc="",
+    )))
+    store.commit()
+    store.close()
+    fetches: list[str] = []
+
+    def fake_fetch(url: str, timeout_s: float):
+        fetches.append(url)
+        return b"\xff\xd8\xff", "image/jpeg"
+
+    cache = ThumbnailCache(
+        cache_dir=tmp_path / "c",
+        enabled=True,
+        allowed_hosts=frozenset({"anvis.iaai.com"}),
+        fetch=fake_fetch,
+    )
+    warm_active_thumbs(limit=1, db_path=db, cache=cache, workers=1)
+    assert len(fetches) == 1
+    assert "early" in fetches[0]

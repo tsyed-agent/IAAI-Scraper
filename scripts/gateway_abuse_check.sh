@@ -30,15 +30,15 @@ else
     fail "/commands does not return 404"
   fi
   for path in /docs /redoc /openapi.json; do
-    if grep -q "location = $path" "$TEMPLATE" || grep -q "location ^~ $path" "$TEMPLATE"; then
-      pass "blocks $path"
-    else
-      # template may use a shared regex — accept openapi|docs|redoc pattern
-      if grep -E 'docs|redoc|openapi' "$TEMPLATE" | grep -q 'return 404'; then
-        pass "OpenAPI surface blocked (shared rule covers $path)"
+    # Require a dedicated location for each path (no shared-rule fallback).
+    if grep -E "location (= |\\^~ )${path}([[:space:]{]|$)" "$TEMPLATE" >/dev/null; then
+      if grep -A3 -E "location (= |\\^~ )${path}([[:space:]{]|$)" "$TEMPLATE" | grep -q 'return 404'; then
+        pass "blocks $path"
       else
-        fail "no block rule covering $path"
+        fail "$path location missing return 404"
       fi
+    else
+      fail "no location block for $path"
     fi
   done
 fi

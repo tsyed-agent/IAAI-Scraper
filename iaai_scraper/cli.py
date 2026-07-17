@@ -74,8 +74,11 @@ def crawl(
         "--warm-thumbs/--no-warm-thumbs",
         help="after a successful crawl, prefetch first-page active thumbs (or set IAAI_WARM_THUMBS=1)",
     ),
-    warm_limit: int = typer.Option(
-        50, "--warm-limit", min=1, help="max active lots to warm when --warm-thumbs",
+    warm_limit: Optional[int] = typer.Option(
+        None,
+        "--warm-limit",
+        min=1,
+        help="max active lots to warm (default: IAAI_WARM_THUMBS_LIMIT or 50)",
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
@@ -104,7 +107,10 @@ def crawl(
         "1", "true", "yes", "on",
     )
     if do_warm:
-        warm = warm_active_thumbs(limit=warm_limit)
+        limit = warm_limit if warm_limit is not None else _env_int_opt(
+            "IAAI_WARM_THUMBS_LIMIT", 50,
+        )
+        warm = warm_active_thumbs(limit=limit)
         typer.echo(json.dumps(warm.as_dict(), indent=2, default=str))
 
 
@@ -351,13 +357,18 @@ def worker(
 
 @app.command("warm-thumbs")
 def warm_thumbs_cmd(
-    limit: int = typer.Option(50, min=0, help="max active lots to warm (default first page size)"),
+    limit: Optional[int] = typer.Option(
+        None,
+        min=0,
+        help="max active lots to warm (default: IAAI_WARM_THUMBS_LIMIT or 50)",
+    ),
     workers: int = typer.Option(4, min=1, help="parallel fetch workers"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ) -> None:
     """Prefetch thumbnail cache for active lots (offline vs IAAI HTML; hits image CDN)."""
     _setup_logging(verbose)
-    report = warm_active_thumbs(limit=limit, workers=workers)
+    resolved = limit if limit is not None else _env_int_opt("IAAI_WARM_THUMBS_LIMIT", 50)
+    report = warm_active_thumbs(limit=resolved, workers=workers)
     typer.echo(json.dumps(report.as_dict(), indent=2, default=str))
 
 

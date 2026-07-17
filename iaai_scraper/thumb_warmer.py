@@ -44,7 +44,7 @@ def warm_active_thumbs(
     cache: Optional[ThumbnailCache] = None,
     workers: int = 4,
 ) -> WarmReport:
-    """Warm thumbs for up to ``limit`` active lots (newest first by last_seen)."""
+    """Warm thumbs for up to ``limit`` active lots (default GET /lots order)."""
     limit = max(0, int(limit))
     report = WarmReport()
     if limit == 0:
@@ -53,12 +53,13 @@ def warm_active_thumbs(
     store = SqliteStore(db_path=db_path) if db_path is not None else SqliteStore()
     cache = cache or ThumbnailCache()
     try:
+        # Match list_lots defaults: auction_date ascending (first UI page).
         rows, _total = store.query_lots(
             {"status": "active"},
             limit=limit,
             offset=0,
-            sort="last_seen",
-            descending=True,
+            sort="auction_date",
+            descending=False,
         )
     finally:
         store.close()

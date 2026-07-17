@@ -19,8 +19,12 @@ def test_nginx_template_has_abuse_controls():
     assert "client_max_body_size" in text
     assert "location ^~ /commands" in text
     assert "return 404" in text
+    # Each OpenAPI surface needs its own location (not a shared fallback).
     for path in ("/docs", "/redoc", "/openapi.json"):
-        assert path in text
+        assert re.search(
+            rf"location (= |\^~ ){re.escape(path)}(\s|\{{|$)",
+            text,
+        ), f"missing dedicated location for {path}"
 
 
 def test_gateway_abuse_check_script_offline_passes():

@@ -30,7 +30,9 @@ if [[ -z "$TOKEN" || "$TOKEN" == change-me* ]]; then
 fi
 
 PROJECT="${IAAI_COMPOSE_PROJECT:-iaai011}"
-PORT="${IAAI_API_PORT:-8000}"
+# Prefer shell env, else the same .env Compose loads for published ports.
+ENV_PORT="$(grep -E '^IAAI_API_PORT=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r' || true)"
+PORT="${IAAI_API_PORT:-${ENV_PORT:-8000}}"
 BASE="http://127.0.0.1:${PORT}"
 AUTH=(-H "Authorization: Bearer $TOKEN")
 CMD_AUTH=(-H "Authorization: Bearer $CMD_TOKEN")
