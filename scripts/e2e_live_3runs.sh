@@ -41,14 +41,15 @@ for RUN in 1 2 3; do
   cat "$OUTDIR/e2e_run${RUN}_kpi.json" >> "$LOG"
 
   # Ontario invariants (branch ids, floor count, image_url coverage).
-  if ! IAAI_DATA_DIR="$IAAI_DATA_DIR" "$PYTHON" scripts/verify_ontario_crawl.py \
+  if IAAI_DATA_DIR="$IAAI_DATA_DIR" "$PYTHON" scripts/verify_ontario_crawl.py \
       >"$OUTDIR/e2e_run${RUN}_ontario.txt" 2>&1; then
+    echo pass >"$OUTDIR/e2e_run${RUN}_ontario.status"
+    cat "$OUTDIR/e2e_run${RUN}_ontario.txt"
+  else
+    echo fail >"$OUTDIR/e2e_run${RUN}_ontario.status"
     echo "ONTARIO VERIFY FAILED run=$RUN" | tee -a "$LOG"
     cat "$OUTDIR/e2e_run${RUN}_ontario.txt" | tee -a "$LOG"
-    # Do not set FAILED here — final canary_summary.json is the gate (exact
-    # source match + KPI anomalies). Floor can lag live inventory dips.
-  else
-    cat "$OUTDIR/e2e_run${RUN}_ontario.txt"
+    FAILED=1
   fi
 done
 
@@ -103,6 +104,19 @@ for k in kpis:
             f"run{k.get('run')}: status={k.get('status')!r}"
         )
 
+# Ontario verify is part of the canary gate (branch ids, floor, image_url coverage).
+for i in (1, 2, 3):
+    status_path = root / f"e2e_run{i}_ontario.status"
+    if not status_path.exists():
+        summary["anomalies"].append(f"run{i}: ontario verify status missing")
+        continue
+    if status_path.read_text().strip() != "pass":
+        detail = (root / f"e2e_run{i}_ontario.txt").read_text().strip()
+        summary["anomalies"].append(
+            f"run{i}: ontario verify failed"
+            + (f" ({detail})" if detail else "")
+        )
+
 # Cross-run stability: ontario_seen should not swing wildly between consecutive runs.
 seen = [k.get("ontario_seen") for k in kpis if k.get("ontario_seen") is not None]
 if len(seen) >= 2:
@@ -120,12 +134,7 @@ if summary["status"] != "pass":
 PY
 
 STATUS=$?
-# Crawl hard-fails still count; KPI summary is the authoritative pass/fail.
-if [[ $FAILED -ne 0 ]]; then
-  echo "One or more crawls failed — see $OUTDIR" >&2
-  exit 1
-fi
-if [[ $STATUS -ne 0 ]]; then
+if [[ $FAILED -ne 0 || $STATUS -ne 0 ]]; then
   echo "CANARY FAILED — see $OUTDIR" >&2
   exit 1
 fi
