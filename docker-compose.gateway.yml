@@ -1,0 +1,54 @@
+# TLS edge gateway in front of the private API.
+# Usage:
+#   scripts/gen_gateway_certs.sh
+#   docker compose -f docker-compose.yml -f docker-compose.gateway.yml up --build -d
+#
+# Public HTTPS: :8443 (override IAAI_GATEWAY_HTTPS_PORT).
+# Commands stay on loopback :8000 / CLI — not published via this edge.
+# See docs/ops-gateway.md
+
+services:
+  iaai-api:
+    networks:
+      - iaai-internal
+
+  iaai-gateway:
+    image: nginx:1.27-alpine
+    container_name: iaai-gateway
+    restart: unless-stopped
+    depends_on:
+      - iaai-api
+    environment:
+      # Must match the host-mapped HTTPS port below (HTTP→HTTPS redirects).
+      IAAI_GATEWAY_HTTPS_PORT: ${IAAI_GATEWAY_HTTPS_PORT:-8443}
+    ports:
+      - "${IAAI_GATEWAY_HTTP_PORT:-8080}:80"
+      - "${IAAI_GATEWAY_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./docker/gateway/nginx.conf.template:/etc/nginx/nginx.conf.template:ro
+      - ./docker/gateway/certs:/etc/nginx/certs:ro
+      - iaai-gateway-logs:/var/log/nginx
+    # Restrict envsubst to the port var so nginx $host / $request_uri stay intact.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        envsubst '$${IAAI_GATEWAY_HTTPS_PORT}' \
+          < /etc/nginx/nginx.conf.template > /tmp/nginx.conf
+        exec nginx -g 'daemon off;' -c /tmp/nginx.conf
+    networks:
+      - iaai-internal
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      - /var/cache/nginx:size=32m,mode=1777
+    # No host access to the API except via published loopback from the base
+    # compose file (127.0.0.1:8000) for ops / command routes.
+
+networks:
+  iaai-internal:
+    driver: bridge
+
+volumes:
+  iaai-gateway-logs:

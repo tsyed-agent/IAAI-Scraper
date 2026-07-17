@@ -22,9 +22,9 @@ and `docs/handoffs/`.
 Ontario auction lots. Playwright clears Imperva; data lands in SQLite + raw JSONL;
 FastAPI serves a private read/command API. Single package `iaai_scraper`.
 
-Code is on `main` (PRs #6–#9 merged). Prefer small task branches off updated
-`main`. Next P0 coding: TLS gateway (2.3); 0.11 in-container crawl still
-auth-gated.
+Code is on `main` (PRs #6–#10 merged). Prefer small task branches off updated
+`main`. Next P0 after gateway: durable worker (2.4b) / canary (2.5);
+0.11 in-container crawl still auth-gated.
 
 **Crawler runs on a host you control** (CLI / Docker / cron). GitHub Actions is
 CI (`pytest`) only — not the live scrape.
@@ -38,6 +38,7 @@ Activate a local venv first (`.venv/` may be a broken Linux copy — use
 - Crawl: `python -m iaai_scraper.cli crawl --max-pages 3 -v`
 - Scheduled wrapper: `scripts/scheduled_crawl.sh` (see `docs/ops-scheduling.md`)
 - Offsite backup: `scripts/offsite_backup.sh` (see `docs/ops-backup.md`)
+- TLS gateway: `docker compose -f docker-compose.yml -f docker-compose.gateway.yml up -d` (see `docs/ops-gateway.md`)
 - Stats: `python -m iaai_scraper.cli stats`
 - API: `python -m iaai_scraper.cli serve` → `127.0.0.1:8000` (`/docs`)
 
