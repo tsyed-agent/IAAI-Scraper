@@ -25,7 +25,7 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
-- **Port:** binds `127.0.0.1:8000` only (not `0.0.0.0` on the host). Put nginx/Caddy/Cloudflare Tunnel in front for remote access.
+- **Port:** binds `127.0.0.1:8000` only (not `0.0.0.0` on the host). For remote access use the sample TLS edge (`docs/ops-gateway.md`) or your own nginx/Caddy/Cloudflare Tunnel.
 - **Auth:** container refuses to start without `IAAI_API_TOKEN`. All routes except `GET /healthz` require a token; set `IAAI_COMMAND_TOKEN` separately for crawl commands.
 - **Network:** outbound HTTPS to `ca.iaai.com` happens only when you call `POST /commands/crawl` (Playwright crawl). Reads are local SQLite only.
 - **Data:** persisted in Docker volume `iaai-data` at `/data`.
@@ -85,14 +85,18 @@ CLI shortcuts (same logic, for ops without HTTP):
 
 ```bash
 python -m iaai_scraper.cli crawl            # sync via CLI (blocking)
+python -m iaai_scraper.cli enqueue-crawl    # durable queue: enqueue crawl job
+python -m iaai_scraper.cli worker --once    # durable queue: claim+run one job
 python -m iaai_scraper.cli stats            # DB statistics
 python -m iaai_scraper.cli backup           # atomic snapshot under data/backups/
 python -m iaai_scraper.cli offsite-backup   # upload DB+raw + SHA-256 manifest
+python -m iaai_scraper.cli backfill-raw     # replay surviving raw JSONL into SQLite (offline)
 python -m iaai_scraper.cli restore-drill    # prove off-host snapshot restores
 
 python scripts/verify_ontario_crawl.py     # verify last crawl invariants
 python scripts/audit_raw_coverage.py data/raw/**/*.jsonl.gz  # offline field/completeness audit
-scripts/scheduled_crawl.sh                 # cron entrypoint: crawl + one retry (see docs/ops-scheduling.md)
+scripts/scheduled_worker.sh                # preferred cron entrypoint: durable queue worker (2.4b)
+scripts/scheduled_crawl.sh                 # thin cron entrypoint: crawl + one retry (2.4a)
 ```
 
 Example API calls:
@@ -177,8 +181,11 @@ completeness checks), usage, results, and limitations are documented in
 | [`docs/07-live-verification.md`](docs/07-live-verification.md) | **Live E2E verification of Ontario-at-source crawl (2026-06-26).** |
 | [`docs/09-enterprise-hardening-plan.md`](docs/09-enterprise-hardening-plan.md) | **Production gates, target architecture, testing, SLOs, and multi-source roadmap.** |
 | [`docs/10-implementation-plan.md`](docs/10-implementation-plan.md) | **Actionable next plan: media pointers/cache, UI boundary, remaining P0/P1 tasks.** |
-| [`docs/ops-scheduling.md`](docs/ops-scheduling.md) | Cron/systemd crawl schedule + `scheduled_crawl.sh` retry wrapper. |
+| [`docs/ops-scheduling.md`](docs/ops-scheduling.md) | Cron/systemd crawl schedule + durable worker (`scheduled_worker.sh`) / thin wrapper. |
 | [`docs/ops-backup.md`](docs/ops-backup.md) | Off-host backup upload + restore drill. |
+| [`docs/ops-gateway.md`](docs/ops-gateway.md) | TLS nginx edge, rate/body limits, secrets, command isolation. |
+| [`docs/ops-backfill.md`](docs/ops-backfill.md) | Offline raw JSONL → SQLite baseline backfill. |
+| [`docs/api-versioning.md`](docs/api-versioning.md) | API schema version (`X-API-Version`), deprecation / Sunset policy. |
 | [`docs/project-tracker.html`](docs/project-tracker.html) | **Living HTML status board** (phases, tasks, tags, agent comments, PR links). |
 | [`docs/project-tracker.md`](docs/project-tracker.md) | How agents must update the tracker (short). |
 | [`docs/handoffs/2026-07-16-phase0-phase2-handoff.md`](docs/handoffs/2026-07-16-phase0-phase2-handoff.md) | Evening handoff (PRs #8/#9); next after backups = TLS gateway. |

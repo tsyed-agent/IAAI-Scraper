@@ -15,6 +15,9 @@ Authentication (when ``IAAI_REQUIRE_AUTH`` is enabled or ``IAAI_API_TOKEN`` is s
   or ``X-API-Key: <token>``. Thumbnail also accepts short-lived ``?expires=&sig=``
   (preferred for ``<img src>``) or deprecated ``?api_key=``.
   Set ``IAAI_API_TOKEN`` in production / Docker.
+
+Schema versioning: every response includes ``X-API-Version: v1``. Typed response
+models live in ``api_schemas``; policy in ``docs/api-versioning.md``.
 """
 from __future__ import annotations
 
@@ -29,8 +32,22 @@ from typing import Any, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from . import config
+from .api_schemas import (
+    API_KEY_QUERY_DEPRECATION_LINK,
+    API_KEY_QUERY_SUNSET,
+    API_SCHEMA_VERSION,
+    FiltersResponseV1,
+    FreshnessResponseV1,
+    HealthResponseV1,
+    LotResponseV1,
+    LotsListResponseV1,
+    PriceHistoryResponseV1,
+    StatsResponseV1,
+    StatusHistoryResponseV1,
+)
 from .auth import (
     media_signed_href,
     require_api_auth,
@@ -81,9 +98,24 @@ async def _lifespan(app: FastAPI):
 app = FastAPI(
     title="IAAI Ontario API",
     version="0.5.0",
-    description="Query scraped Ontario lots and run crawl commands through one API.",
+    description=(
+        "Query scraped Ontario lots and run crawl commands through one API. "
+        f"Response schema version **{API_SCHEMA_VERSION}** "
+        f"(header ``X-API-Version: {API_SCHEMA_VERSION}``). "
+        "Deprecation policy: docs/api-versioning.md."
+    ),
     lifespan=_lifespan,
 )
+
+
+class _ApiVersionMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        response = await call_next(request)
+        response.headers.setdefault("X-API-Version", API_SCHEMA_VERSION)
+        return response
+
+
+app.add_middleware(_ApiVersionMiddleware)
 
 def _store() -> SqliteStore:
     return SqliteStore(db_path=config.DB_PATH)
@@ -179,7 +211,7 @@ def _decode_cursor(cursor: str, sort: str, descending: bool) -> tuple[Any, str]:
 # ------------------------------------------------------------------ #
 # Meta / health
 # ------------------------------------------------------------------ #
-@app.get("/healthz")
+@app.get("/healthz", response_model=HealthResponseV1)
 def healthz() -> dict[str, str]:
     """Liveness probe — no auth (Docker HEALTHCHECK only)."""
     return {"status": "ok"}
@@ -233,7 +265,11 @@ def readyz(response: Response) -> dict[str, Any]:
         store.close()
 
 
-@app.get("/stats", dependencies=[Depends(require_api_auth)])
+@app.get(
+    "/stats",
+    response_model=StatsResponseV1,
+    dependencies=[Depends(require_api_auth)],
+)
 def stats() -> dict[str, Any]:
     store = _store()
     try:
@@ -242,7 +278,11 @@ def stats() -> dict[str, Any]:
         store.close()
 
 
-@app.get("/stats/freshness", dependencies=[Depends(require_api_auth)])
+@app.get(
+    "/stats/freshness",
+    response_model=FreshnessResponseV1,
+    dependencies=[Depends(require_api_auth)],
+)
 def stats_freshness() -> dict[str, Any]:
     store = _store()
     try:
@@ -251,7 +291,11 @@ def stats_freshness() -> dict[str, Any]:
         store.close()
 
 
-@app.get("/filters", dependencies=[Depends(require_api_auth)])
+@app.get(
+    "/filters",
+    response_model=FiltersResponseV1,
+    dependencies=[Depends(require_api_auth)],
+)
 def list_filters() -> dict[str, Any]:
     store = _store()
     try:
@@ -316,7 +360,12 @@ def command_crawl_status() -> dict[str, Any]:
 # ------------------------------------------------------------------ #
 # Lots (read from local DB)
 # ------------------------------------------------------------------ #
-@app.get("/lots", dependencies=[Depends(require_api_auth)])
+@app.get(
+    "/lots",
+    response_model=LotsListResponseV1,
+    response_model_exclude_unset=True,
+    dependencies=[Depends(require_api_auth)],
+)
 def list_lots(
     make: Optional[str] = Query(None, description="make or comma-separated makes"),
     model: Optional[str] = Query(None, description="model or comma-separated models"),
@@ -413,7 +462,12 @@ def list_lots(
         store.close()
 
 
-@app.get("/lots/{stock_number}", dependencies=[Depends(require_api_auth)])
+@app.get(
+    "/lots/{stock_number}",
+    response_model=LotResponseV1,
+    response_model_exclude_unset=True,
+    dependencies=[Depends(require_api_auth)],
+)
 def get_lot(
     stock_number: str,
     include_raw: bool = Query(False, description="include preserved source payload"),
@@ -466,10 +520,20 @@ def get_lot_thumbnail(
         "Cache-Control": cache_control,
         "X-Image-Cache": "HIT" if thumb.from_cache else "MISS",
     }
+    if _auth_mode == "api_key_query":
+        headers["Deprecation"] = "true"
+        headers["Sunset"] = API_KEY_QUERY_SUNSET
+        headers["Link"] = (
+            f'<{API_KEY_QUERY_DEPRECATION_LINK}>; rel="deprecation"; type="text/html"'
+        )
     return Response(content=thumb.body, media_type=thumb.content_type, headers=headers)
 
 
-@app.get("/lots/{stock_number}/price-history", dependencies=[Depends(require_api_auth)])
+@app.get(
+    "/lots/{stock_number}/price-history",
+    response_model=PriceHistoryResponseV1,
+    dependencies=[Depends(require_api_auth)],
+)
 def get_price_history(
     stock_number: str,
     limit: int = Query(500, ge=1, le=5000),
@@ -493,7 +557,11 @@ def get_price_history(
         store.close()
 
 
-@app.get("/lots/{stock_number}/status-history", dependencies=[Depends(require_api_auth)])
+@app.get(
+    "/lots/{stock_number}/status-history",
+    response_model=StatusHistoryResponseV1,
+    dependencies=[Depends(require_api_auth)],
+)
 def get_status_history(
     stock_number: str,
     limit: int = Query(500, ge=1, le=5000),

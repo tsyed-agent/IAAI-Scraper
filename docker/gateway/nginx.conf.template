@@ -1,0 +1,115 @@
+# IAAI private API — TLS edge gateway (sample).
+# Upstream is the Docker service `iaai-api` on the internal network.
+# Command routes are blocked here; crawl via loopback :8000 or CLI/cron only.
+#
+# See docs/ops-gateway.md
+
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /tmp/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+    sendfile      on;
+    server_tokens off;
+
+    # Cap request bodies (API is mostly GET; crawl commands stay off this edge).
+    client_max_body_size 1m;
+    client_body_timeout  10s;
+    client_header_timeout 10s;
+
+    # Per-IP request rate (tune via docs/ops-gateway.md).
+    limit_req_zone $binary_remote_addr zone=iaai_edge:10m rate=10r/s;
+    limit_conn_zone $binary_remote_addr zone=iaai_conn:10m;
+
+    # Structured access log for audit (app already redacts api_key/sig query
+    # params; do not enable Authorization header logging).
+    log_format iaai_audit '$remote_addr - $remote_user [$time_local] '
+                          '"$request" $status $body_bytes_sent '
+                          'rt=$request_time '
+                          'ua="$http_user_agent" '
+                          'ref="$http_referer"';
+    access_log /var/log/nginx/access.log iaai_audit;
+
+    # Docker embedded DNS — resolve iaai-api at request time so nginx -t
+    # succeeds without the upstream container present.
+    resolver 127.0.0.11 ipv6=off valid=30s;
+
+    # Optional IP allowlist — uncomment and set real CIDRs for locked-down edges.
+    # geo $iaai_allow {
+    #     default        0;
+    #     10.0.0.0/8     1;
+    #     192.168.0.0/16 1;
+    # }
+
+    server {
+        listen 80;
+        server_name _;
+        # Host-mapped HTTPS port (compose IAAI_GATEWAY_HTTPS_PORT). envsubst at
+        # container start — do not use bare https://$host (drops non-443 ports).
+        return 301 https://$host:${IAAI_GATEWAY_HTTPS_PORT}$request_uri;
+    }
+
+    server {
+        listen 443 ssl;
+        http2 on;
+        server_name _;
+
+        ssl_certificate     /etc/nginx/certs/fullchain.pem;
+        ssl_certificate_key /etc/nginx/certs/privkey.pem;
+        ssl_protocols       TLSv1.2 TLSv1.3;
+        ssl_prefer_server_ciphers off;
+        ssl_session_timeout 1d;
+        ssl_session_cache   shared:SSL:10m;
+
+        # if ($iaai_allow = 0) { return 403; }
+
+        limit_req  zone=iaai_edge burst=20 nodelay;
+        limit_conn iaai_conn 20;
+
+        # Keep crawl/admin surfaces off the public edge (use loopback API or CLI).
+        location ^~ /commands {
+            return 404;
+        }
+        location ^~ /docs {
+            return 404;
+        }
+        location ^~ /redoc {
+            return 404;
+        }
+        location = /openapi.json {
+            return 404;
+        }
+
+        location = /healthz {
+            set $iaai_upstream "iaai-api:8000";
+            proxy_pass http://$iaai_upstream;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            access_log off;
+        }
+
+        location / {
+            set $iaai_upstream "iaai-api:8000";
+            proxy_pass http://$iaai_upstream;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_hide_header X-Powered-By;
+            proxy_read_timeout 60s;
+            proxy_send_timeout 60s;
+        }
+    }
+}

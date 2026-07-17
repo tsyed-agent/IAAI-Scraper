@@ -13,7 +13,7 @@ Policy (doc 09 §6):
 | Whole-run retry | once after ~20 minutes | Then alert and stop |
 | Startup jitter | uniform 0–5 minutes by default | Set `IAAI_SCHED_JITTER_S=0` to disable |
 
-## Wrapper
+## Wrapper (2.4a — thin)
 
 ```bash
 scripts/scheduled_crawl.sh
@@ -30,11 +30,31 @@ scripts/scheduled_crawl.sh
   settings are rejected before a crawl and emit an `ALERT:` line.
 - Second failure → loud `ALERT:` log line, optional `IAAI_SCHED_ALERT_HOOK`, exit 1.
 
+## Durable worker (2.4b — preferred for production)
+
+```bash
+scripts/scheduled_worker.sh
+# or manually:
+python -m iaai_scraper.cli enqueue-crawl
+python -m iaai_scraper.cli worker --once
+```
+
+- Job state is stored in SQLite (`data/jobs.db` or `IAAI_JOBS_DB`).
+- A crash while `running` is recovered on the next worker start (stale lease →
+  re-queue, up to `max_attempts`, default 2).
+- Prometheus textfile metrics: `data/metrics/crawl_worker.prom`
+  (`IAAI_WORKER_METRICS_PATH` to override).
+- The in-process API `POST /commands/crawl` path is unchanged and remains
+  non-durable — do not use it for production schedules.
+
 ## Example crontab (6-hour baseline + wrapper jitter)
 
 ```cron
-# Ontario inventory crawl — exact hour is randomized by the wrapper (0–5 min)
-0 0,6,12,18 * * * cd /srv/iaai && IAAI_PYTHON=/srv/iaai/.venv/bin/python IAAI_SCHED_JITTER_S=300 /srv/iaai/scripts/scheduled_crawl.sh >>/var/log/iaai-crawl.log 2>&1
+# Ontario inventory crawl — durable worker (preferred)
+0 0,6,12,18 * * * cd /srv/iaai && IAAI_PYTHON=/srv/iaai/.venv/bin/python IAAI_SCHED_JITTER_S=300 /srv/iaai/scripts/scheduled_worker.sh >>/var/log/iaai-crawl.log 2>&1
+
+# Thin wrapper alternative (2.4a):
+# 0 0,6,12,18 * * * cd /srv/iaai && IAAI_PYTHON=/srv/iaai/.venv/bin/python /srv/iaai/scripts/scheduled_crawl.sh >>/var/log/iaai-crawl.log 2>&1
 ```
 
 Prefer the project venv’s Python via `IAAI_PYTHON=…/.venv/bin/python`.

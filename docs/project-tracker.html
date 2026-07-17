@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-updated="2026-07-16T23:20">
+<html lang="en" data-updated="2026-07-17T03:20">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -290,7 +290,7 @@
       </p>
       <div class="meta">
         <span class="pill">Updated <strong id="board-updated">2026-07-16</strong></span>
-        <span class="pill">Current: Phase 2 Task 2 backups → Task 3 TLS gateway</span>
+        <span class="pill">Current: Phase 2 complete — next Phase 3 / 0.11</span>
         <a href="./handoffs/2026-07-16-phase0-phase2-handoff.md">Handoff (latest)</a>
         <a href="./handoffs/2026-07-16-phase0-handoff.md">Handoff (morning)</a>
         <a href="./09-enterprise-hardening-plan.md">Plan 09</a>
@@ -321,7 +321,7 @@
         </div>
         <div class="card">
           <h3>Now</h3>
-          <p>Phase 2 scheduler + off-host backups landed. Next: TLS gateway (2.3). Phase 0 Task 12 still needs authorized in-container crawl verify.</p>
+          <p>Phase 2 P0 board complete including durable worker (2.4b). Next: Phase 3 UI or Phase 0 Task 12 in-container crawl verify.</p>
         </div>
       </div>
     </header>
@@ -690,7 +690,7 @@
     </section>
 
     <!-- ===================== PHASE 2 ===================== -->
-    <section class="phase" id="phase-2" data-phase-status="blocking">
+    <section class="phase" id="phase-2" data-phase-status="completed">
       <div class="phase-head">
         <div class="phase-num">2</div>
         <div>
@@ -716,16 +716,18 @@
             <h4>Acceptance</h4>
             <p>Upload snapshot + raw to versioned object storage; SHA-256 manifest; restore integrity + lot-count floor.</p>
             <h4>PR / commits</h4>
-            <p><a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/10">PR #10</a> · <code>b208f40</code> · <code>iaai_scraper/offsite_backup.py</code> · <code>scripts/offsite_backup.sh</code> · <code>docs/ops-backup.md</code></p>
+            <p><a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/10">PR #10</a> merged · <code>ba29c4c</code> · <code>iaai_scraper/offsite_backup.py</code> · <code>scripts/offsite_backup.sh</code> · <code>docs/ops-backup.md</code></p>
             <h4>Comments</h4>
             <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
+              <p>Merged to main (merge commit ba29c4c). Bugbot fixes (upload snapshot, restore path safety, env defaults) included.</p></li>
               <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
               <p>Filesystem + optional S3 backends; restore drill in CI. Legal task 2.1 removed from board per product.</p></li>
             </ul>
           </div>
         </details>
 
-        <details class="task" data-status="open" data-id="2.3">
+        <details class="task" data-status="completed" data-id="2.3">
           <summary>
             <span class="check"></span>
             <span class="task-n">Task 3</span>
@@ -733,8 +735,21 @@
               <span class="task-name">TLS gateway, rate/body limits, secrets, audit logs</span>
               <span class="task-ref">doc 10 · 2.3 · edge / proxy</span>
             </span>
-            <span class="tags"><span class="tag open">open</span> <span class="tag blocking">blocking</span></span>
+            <span class="tags"><span class="tag completed">completed</span></span>
           </summary>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p>Reverse-proxy TLS, rate/body limits, command routes off public edge, secrets + audit log guidance. External abuse tests remain ops follow-up.</p>
+            <h4>PR / commits</h4>
+            <p><code>docker/gateway/nginx.conf.template</code> · <code>docker-compose.gateway.yml</code> · <code>docs/ops-gateway.md</code></p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
+              <p>Fixed HTTP→HTTPS redirect to keep IAAI_GATEWAY_HTTPS_PORT (envsubst); was dropping to :443.</p></li>
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
+              <p>Nginx sample + compose overlay; blocks /commands and OpenAPI on edge; offline config/cert tests.</p></li>
+            </ul>
+          </div>
         </details>
 
         <details class="task" data-status="completed" data-id="2.4">
@@ -749,20 +764,43 @@
           </summary>
           <div class="task-body">
             <h4>Acceptance</h4>
-            <p><code>scripts/scheduled_crawl.sh</code> + <code>docs/ops-scheduling.md</code>; lock-busy exit 0; one retry; alert on second fail. Full queue worker still open (2.4b).</p>
+            <p><code>scripts/scheduled_crawl.sh</code> + <code>docs/ops-scheduling.md</code>; lock-busy exit 0; one retry; alert on second fail. Durable queue worker: task 2.4b.</p>
             <h4>PR / commits</h4>
             <p><a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/9">PR #9</a> · <code>1d8ad29</code></p>
             <h4>Comments</h4>
             <ul class="comments">
               <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
-              <p>POSIX wrapper + offline shell tests (4). Full durable worker still P0.</p></li>
+              <p>POSIX wrapper + offline shell tests (4). Durable worker tracked as 2.4b.</p></li>
               <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
               <p>Validated retry/jitter settings and added real randomized startup delay; 131 offline tests green.</p></li>
             </ul>
           </div>
         </details>
 
-        <details class="task" data-status="open" data-id="2.5">
+        <details class="task" data-status="completed" data-id="2.4b">
+          <summary>
+            <span class="check"></span>
+            <span class="task-n">Task 4b</span>
+            <span>
+              <span class="task-name">Durable queue worker + metrics/alerts</span>
+              <span class="task-ref">doc 10 · 2.4b</span>
+            </span>
+            <span class="tags"><span class="tag completed">completed</span></span>
+          </summary>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p>SQLite job queue; restart recovers stale running leases; one re-queue then alert; Prometheus textfile metrics.</p>
+            <h4>PR / commits</h4>
+            <p><code>iaai_scraper/worker.py</code> · <code>scripts/scheduled_worker.sh</code> · CLI <code>enqueue-crawl</code> / <code>worker</code></p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
+              <p>Offline restart/fault tests; preferred cron path is <code>scheduled_worker.sh</code> (API crawl remains non-durable).</p></li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="task" data-status="completed" data-id="2.5">
           <summary>
             <span class="check"></span>
             <span class="task-n">Task 5</span>
@@ -770,12 +808,24 @@
               <span class="task-name">Authorized 3-run live canary</span>
               <span class="task-ref">doc 10 · 2.5 · data QA</span>
             </span>
-            <span class="tags"><span class="tag open">open</span> <span class="tag blocking">blocking</span></span>
+            <span class="tags"><span class="tag completed">completed</span></span>
           </summary>
-          <div class="task-body"><p>Exact totals/branches/prices vs source; never against prod DB.</p></div>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p>Exact totals/branches/prices vs source; never against prod DB.</p>
+            <h4>Evidence</h4>
+            <p><code>data/canary/2026-07-17T0230Z/</code> · 3/3 completed · 1266/1266 match · branches stable · 0 bad rows</p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
+              <p>Portable e2e script + floor 1000; 3 isolated live runs passed (30s/25s/16s). Prod <code>data/</code> untouched.</p></li>
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
+              <p>Bugbot fix: ontario verify failures now fail the canary gate (status file + summary anomalies).</p></li>
+            </ul>
+          </div>
         </details>
 
-        <details class="task" data-status="open" data-id="2.6">
+        <details class="task" data-status="completed" data-id="2.6">
           <summary>
             <span class="check"></span>
             <span class="task-n">Task 6</span>
@@ -783,11 +833,22 @@
               <span class="task-name">Raw baseline backfill from surviving archives</span>
               <span class="task-ref">doc 09 Phase B remainder</span>
             </span>
-            <span class="tags"><span class="tag open">open</span></span>
+            <span class="tags"><span class="tag completed">completed</span></span>
           </summary>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p>Offline <code>backfill-raw</code> replays JSONL/JSONL.gz via <code>parse_row</code> → <code>upsert_lot</code>; records <code>crawl_runs.run_type=backfill</code>; DLQ unless <code>--strict</code>.</p>
+            <h4>PR / commits</h4>
+            <p><code>cursor/phase2-raw-backfill</code> · <code>iaai_scraper/raw_backfill.py</code> · <code>docs/ops-backfill.md</code></p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
+              <p>CLI <code>backfill-raw</code> + offline fixture tests; no network / no live crawl.</p></li>
+            </ul>
+          </div>
         </details>
 
-        <details class="task" data-status="open" data-id="2.7">
+        <details class="task" data-status="completed" data-id="2.7">
           <summary>
             <span class="check"></span>
             <span class="task-n">Task 7</span>
@@ -795,8 +856,19 @@
               <span class="task-name">Versioned API response schemas + deprecation policy</span>
               <span class="task-ref">doc 09 Phase C remainder</span>
             </span>
-            <span class="tags"><span class="tag open">open</span></span>
+            <span class="tags"><span class="tag completed">completed</span></span>
           </summary>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p><code>X-API-Version: v1</code> + Pydantic <code>*V1</code> models; deprecation policy for <code>?api_key=</code>; contract tests.</p>
+            <h4>PR / commits</h4>
+            <p><code>cursor/phase2-api-schemas</code> · <code>iaai_scraper/api_schemas.py</code> · <code>docs/api-versioning.md</code></p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
+              <p>Header versioning + typed list/detail/stats models; Sunset headers on legacy api_key; 165 pytest green.</p></li>
+            </ul>
+          </div>
         </details>
 
       </div>

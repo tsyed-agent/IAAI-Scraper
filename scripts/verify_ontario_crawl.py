@@ -21,7 +21,9 @@ from iaai_scraper.crawler import Crawler
 from iaai_scraper.storage import SqliteStore
 
 ONTARIO_BRANCH_IDS = set(config.ONTARIO_BRANCH_IDS)
-MIN_ONTARIO_LOTS = 1300  # live inventory fluctuates; floor for pass
+# Live inventory fluctuates day-to-day (was ~1450 in 2026-06; ~1266 in 2026-07).
+# Floor catches empty/broken crawls, not seasonal dips.
+MIN_ONTARIO_LOTS = 1000
 
 
 def verify_db() -> list[str]:
