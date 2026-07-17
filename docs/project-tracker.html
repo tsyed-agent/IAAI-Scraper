@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-updated="2026-07-17T03:45">
+<html lang="en" data-updated="2026-07-17T04:00">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -290,7 +290,7 @@
       </p>
       <div class="meta">
         <span class="pill">Updated <strong id="board-updated">2026-07-17</strong></span>
-        <span class="pill">Current: Phase 3 UI (Yardline) / 0.11 container verify</span>
+        <span class="pill">Current: Phase 3 Yardline /ui</span>
         <a href="./handoffs/2026-07-16-phase0-phase2-handoff.md">Handoff (latest)</a>
         <a href="./handoffs/2026-07-16-phase0-handoff.md">Handoff (morning)</a>
         <a href="./09-enterprise-hardening-plan.md">Plan 09</a>
@@ -321,7 +321,7 @@
         </div>
         <div class="card">
           <h3>Now</h3>
-          <p>Phase 3 Yardline storefront shipped (React + Framer Motion at <code>/ui/</code>). Next: 0.11 in-container crawl verify.</p>
+          <p>Yardline storefront at <code>/ui/</code> (PR #13). 0.11 in-container crawl verified; thumb warmer + gateway abuse on main (#12).</p>
         </div>
       </div>
     </header>
@@ -341,7 +341,7 @@
     </div>
 
     <!-- ===================== PHASE 0 ===================== -->
-    <section class="phase" id="phase-0" data-phase-status="partial">
+    <section class="phase" id="phase-0" data-phase-status="completed">
       <div class="phase-head">
         <div class="phase-num">0</div>
         <div>
@@ -530,7 +530,7 @@
           <div class="task-body"><div class="links"><a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/7">PR #7</a></div></div>
         </details>
 
-        <details class="task" data-status="partial" data-id="0.11">
+        <details class="task" data-status="completed" data-id="0.11">
           <summary>
             <span class="check"></span>
             <span class="task-n">Task 12</span>
@@ -538,15 +538,17 @@
               <span class="task-name">Verify in-container crawl</span>
               <span class="task-ref">plan 0.11 · Handoff B · docker compose</span>
             </span>
-            <span class="tags"><span class="tag partial">partial</span> <span class="tag blocking">blocking</span></span>
+            <span class="tags"><span class="tag completed">completed</span></span>
           </summary>
           <div class="task-body">
             <h4>Acceptance</h4>
-            <p><code>/dev/shm</code> tmpfs landed. Live <code>POST /commands/crawl</code> inside container still needs authorized run.</p>
+            <p><code>/dev/shm</code> tmpfs + live <code>POST /commands/crawl</code> completes inside the container.</p>
             <h4>Comments</h4>
             <ul class="comments">
               <li><div class="who"><span class="sig claude">Claude Code</span><span>2026-07-16</span></div>
               <p>Compose tmpfs added; manual verify open.</p></li>
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
+              <p>Verified via <code>scripts/verify_in_container_crawl.sh</code> — crawl completed in Docker (~poll 5).</p></li>
             </ul>
           </div>
         </details>
@@ -739,7 +741,7 @@
           </summary>
           <div class="task-body">
             <h4>Acceptance</h4>
-            <p>Reverse-proxy TLS, rate/body limits, command routes off public edge, secrets + audit log guidance. External abuse tests remain ops follow-up.</p>
+            <p>Reverse-proxy TLS, rate/body limits, command routes off public edge, secrets + audit log guidance. Abuse checks: <code>scripts/gateway_abuse_check.sh</code> (offline CI + optional live).</p>
             <h4>PR / commits</h4>
             <p><code>docker/gateway/nginx.conf.template</code> · <code>docker-compose.gateway.yml</code> · <code>docs/ops-gateway.md</code></p>
             <h4>Comments</h4>
@@ -748,6 +750,10 @@
               <p>Fixed HTTP→HTTPS redirect to keep IAAI_GATEWAY_HTTPS_PORT (envsubst); was dropping to :443.</p></li>
               <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
               <p>Nginx sample + compose overlay; blocks /commands and OpenAPI on edge; offline config/cert tests.</p></li>
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
+              <p>Added <code>scripts/gateway_abuse_check.sh</code> offline CI assertions + optional live rate/404/body checks.</p></li>
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
+              <p>Tightened offline checks: each of /docs, /redoc, /openapi.json needs its own location+404.</p></li>
             </ul>
           </div>
         </details>
@@ -950,7 +956,7 @@
           </div>
         </details>
 
-        <details class="task" data-status="open" data-id="3.4">
+        <details class="task" data-status="completed" data-id="3.4">
           <summary>
             <span class="check"></span>
             <span class="task-n">Task 4</span>
@@ -958,8 +964,19 @@
               <span class="task-name">Optional: post-crawl warmer for first-page thumbs</span>
               <span class="task-ref">doc 10 Phase 1.5 optional</span>
             </span>
-            <span class="tags"><span class="tag open">open</span></span>
+            <span class="tags"><span class="tag completed">completed</span></span>
           </summary>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p>Prefetch active-lot thumbs after crawl / via <code>warm-thumbs</code> CLI; crawl hot path unchanged unless opted in.</p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
+              <p><code>iaai_scraper/thumb_warmer.py</code> + <code>cli warm-thumbs</code> / <code>--warm-thumbs</code> / <code>IAAI_WARM_THUMBS</code>.</p></li>
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
+              <p>Fixed warmer sort to auction_date ASC (matches GET /lots); honor IAAI_WARM_THUMBS_LIMIT.</p></li>
+            </ul>
+          </div>
         </details>
 
       </div>
