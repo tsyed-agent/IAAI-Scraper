@@ -6,6 +6,7 @@
   python -m iaai_scraper.cli backup           # local atomic SQLite snapshot
   python -m iaai_scraper.cli offsite-backup   # upload snapshot + manifest off-host
   python -m iaai_scraper.cli restore-drill    # download + integrity/lot-count check
+  python -m iaai_scraper.cli backfill-raw     # replay surviving raw JSONL into SQLite
   python -m iaai_scraper.cli serve            # run the read API
 """
 from __future__ import annotations
@@ -30,6 +31,7 @@ from .offsite_backup import (
     run_offsite_backup,
     run_restore_drill,
 )
+from .raw_backfill import run_raw_backfill
 from .storage import SqliteStore, backup_sqlite
 
 app = typer.Typer(add_completion=False, help="IAAI Ontario scraper")
@@ -210,6 +212,47 @@ def restore_drill(
     )
     typer.echo(json.dumps(result.as_dict(), indent=2, default=str))
     if not result.ok:
+        raise typer.Exit(code=1)
+
+
+@app.command("backfill-raw")
+def backfill_raw(
+    raw_dir: Optional[Path] = typer.Option(
+        None,
+        "--raw-dir",
+        help="raw JSONL root (default: data/raw or IAAI_DATA_DIR/raw)",
+    ),
+    db_path: Optional[Path] = typer.Option(
+        None,
+        "--db-path",
+        help="SQLite path (default: IAAI_DB_PATH or data/iaai_ontario.db)",
+    ),
+    strict: bool = typer.Option(
+        False,
+        "--strict",
+        help="abort on the first bad/unparseable row (default: DLQ and continue)",
+    ),
+    include_non_ontario: bool = typer.Option(
+        False,
+        "--include-non-ontario",
+        help="upsert lots outside Ontario branches (default: Ontario only)",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Replay surviving raw JSONL / JSONL.gz archives into SQLite (offline).
+
+    Uses the same parse_row → upsert_lot path as a live crawl. Records a
+    crawl_runs row with run_type=backfill. Safe to re-run. See docs/ops-backfill.md.
+    """
+    _setup_logging(verbose)
+    report = run_raw_backfill(
+        raw_dir=raw_dir if raw_dir is not None else config.RAW_DIR,
+        db_path=db_path if db_path is not None else config.DB_PATH,
+        strict=strict,
+        ontario_only=not include_non_ontario,
+    )
+    typer.echo(json.dumps(report.as_dict(), indent=2, default=str))
+    if report.status != "completed":
         raise typer.Exit(code=1)
 
 
