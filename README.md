@@ -48,6 +48,15 @@ python -m playwright install --with-deps chromium
 python -m iaai_scraper.cli serve            # start the unified API on :8000
 ```
 
+Open the **Yardline** storefront at [http://127.0.0.1:8000/ui/](http://127.0.0.1:8000/ui/)
+(root `/` redirects there). The UI talks only to this API — metadata first,
+viewport-lazy thumbs via signed `thumbnail_href`, and a live sync ribbon while
+`POST /commands/crawl` runs. Rebuild the UI after edits:
+
+```bash
+cd ui && npm install && npm run build   # writes iaai_scraper/static/ui/
+```
+
 **Everything runs through the API** — queries read the local DB; commands sync from IAAI:
 
 ```bash

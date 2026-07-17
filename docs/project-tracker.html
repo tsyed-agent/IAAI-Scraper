@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-updated="2026-07-17T03:50">
+<html lang="en" data-updated="2026-07-17T04:00">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -289,8 +289,8 @@
         pointer-only media with on-demand thumbs.
       </p>
       <div class="meta">
-        <span class="pill">Updated <strong id="board-updated">2026-07-16</strong></span>
-        <span class="pill">Current: Phase 3 UI</span>
+        <span class="pill">Updated <strong id="board-updated">2026-07-17</strong></span>
+        <span class="pill">Current: Phase 3 Yardline /ui</span>
         <a href="./handoffs/2026-07-16-phase0-phase2-handoff.md">Handoff (latest)</a>
         <a href="./handoffs/2026-07-16-phase0-handoff.md">Handoff (morning)</a>
         <a href="./09-enterprise-hardening-plan.md">Plan 09</a>
@@ -321,7 +321,7 @@
         </div>
         <div class="card">
           <h3>Now</h3>
-          <p>Phase 2 on main (#11); 0.11 in-container crawl verified; thumb warmer + gateway abuse checks landed. Next: Phase 3 UI.</p>
+          <p>Yardline storefront at <code>/ui/</code> (PR #13). 0.11 in-container crawl verified; thumb warmer + gateway abuse on main (#12).</p>
         </div>
       </div>
     </header>
@@ -893,7 +893,7 @@
       </div>
       <div class="phase-tasks">
 
-        <details class="task" data-status="open" data-id="3.1">
+        <details class="task" data-status="completed" data-id="3.1" open>
           <summary>
             <span class="check"></span>
             <span class="task-n">Task 1</span>
@@ -901,11 +901,20 @@
               <span class="task-name">List: metadata first, lazy viewport thumbs</span>
               <span class="task-ref">doc 10 · 3.1</span>
             </span>
-            <span class="tags"><span class="tag open">open</span></span>
+            <span class="tags"><span class="tag completed">completed</span></span>
           </summary>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p>Yardline list loads <code>/lots</code> metadata first; viewport IntersectionObserver lazy-loads thumbs via signed <code>thumbnail_href</code>.</p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
+              <p>React storefront at <code>/ui/</code> — shimmer skeletons, cursor infinite scroll, soft image reveal. <a href="https://github.com/tsyed-agent/IAAI-Scraper/pull/13">PR #13</a></p></li>
+            </ul>
+          </div>
         </details>
 
-        <details class="task" data-status="open" data-id="3.2">
+        <details class="task" data-status="completed" data-id="3.2" open>
           <summary>
             <span class="check"></span>
             <span class="task-n">Task 2</span>
@@ -913,11 +922,20 @@
               <span class="task-name">Detail page media (no browser scrape)</span>
               <span class="task-ref">doc 10 · 3.2</span>
             </span>
-            <span class="tags"><span class="tag open">open</span></span>
+            <span class="tags"><span class="tag completed">completed</span></span>
           </summary>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p>Expand uses API detail + primary thumb only; no ca.iaai.com from the browser.</p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
+              <p>Framer Motion shared-element expand; price history loaded lazily.</p></li>
+            </ul>
+          </div>
         </details>
 
-        <details class="task" data-status="open" data-id="3.3">
+        <details class="task" data-status="completed" data-id="3.3" open>
           <summary>
             <span class="check"></span>
             <span class="task-n">Task 3</span>
@@ -925,8 +943,17 @@
               <span class="task-name">Optional CDN / cache headers on thumbs</span>
               <span class="task-ref">doc 10 · 3.3</span>
             </span>
-            <span class="tags"><span class="tag open">open</span></span>
+            <span class="tags"><span class="tag completed">completed</span></span>
           </summary>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p>Private host uses existing <code>IAAI_IMAGE_CACHE_CONTROL</code> / signed URL cache headers (no public CDN).</p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-17</span></div>
+              <p>Documented for Yardline; thumbs already emit Cache-Control from the media route.</p></li>
+            </ul>
+          </div>
         </details>
 
         <details class="task" data-status="completed" data-id="3.4">
