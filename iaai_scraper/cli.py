@@ -7,6 +7,8 @@
   python -m iaai_scraper.cli offsite-backup   # upload snapshot + manifest off-host
   python -m iaai_scraper.cli restore-drill    # download + integrity/lot-count check
   python -m iaai_scraper.cli backfill-raw     # replay surviving raw JSONL into SQLite
+  python -m iaai_scraper.cli enqueue-crawl    # durable queue: enqueue a crawl job
+  python -m iaai_scraper.cli worker           # durable queue: claim+run one/loop jobs
   python -m iaai_scraper.cli serve            # run the read API
 """
 from __future__ import annotations
@@ -33,6 +35,7 @@ from .offsite_backup import (
 )
 from .raw_backfill import run_raw_backfill
 from .storage import SqliteStore, backup_sqlite
+from .worker import DurableWorker, JobQueue, default_jobs_db_path
 
 app = typer.Typer(add_completion=False, help="IAAI Ontario scraper")
 
@@ -254,6 +257,81 @@ def backfill_raw(
     typer.echo(json.dumps(report.as_dict(), indent=2, default=str))
     if report.status != "completed":
         raise typer.Exit(code=1)
+
+
+@app.command("enqueue-crawl")
+def enqueue_crawl(
+    max_pages: int = typer.Option(config.MAX_LIST_PAGES, min=1, help="hard cap on list pages"),
+    page_size: Optional[int] = typer.Option(
+        None, min=1, max=1000, help="rows per page (default Ontario page size)",
+    ),
+    max_attempts: int = typer.Option(
+        2, min=1, help="attempts including the first run (default 2 = one retry)",
+    ),
+    jobs_db: Optional[Path] = typer.Option(
+        None, "--jobs-db", help="job queue SQLite path (default: data/jobs.db)",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Enqueue a durable crawl job (does not run it). Use ``worker`` to execute."""
+    _setup_logging(verbose)
+    queue = JobQueue(db_path=jobs_db if jobs_db is not None else default_jobs_db_path())
+    try:
+        job = queue.enqueue(
+            "crawl",
+            {
+                "page_size": page_size or config.ONTARIO_PAGE_SIZE,
+                "max_list_pages": max_pages,
+                "enrich_details": config.ENRICH_DETAILS,
+                "ontario_at_source": True,
+                "branch_ids": config.ONTARIO_BRANCH_IDS_CSV,
+            },
+            max_attempts=max_attempts,
+        )
+        typer.echo(json.dumps(job.as_dict(), indent=2, default=str))
+    finally:
+        queue.close()
+
+
+@app.command()
+def worker(
+    once: bool = typer.Option(True, "--once/--loop", help="process one job or poll forever"),
+    poll_s: float = typer.Option(5.0, "--poll-s", min=0.1, help="sleep between empty polls in --loop"),
+    lease_seconds: float = typer.Option(
+        3600.0, "--lease-seconds", min=30.0, help="running-job lease TTL for crash recovery",
+    ),
+    jobs_db: Optional[Path] = typer.Option(
+        None, "--jobs-db", help="job queue SQLite path (default: data/jobs.db)",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Run the durable crawl worker (outside the API process).
+
+    Recovers stale ``running`` jobs after restart. See docs/ops-scheduling.md.
+    """
+    _setup_logging(verbose)
+    queue = JobQueue(db_path=jobs_db if jobs_db is not None else default_jobs_db_path())
+    w = DurableWorker(queue, lease_seconds=lease_seconds)
+    try:
+        while True:
+            job = w.run_once()
+            if once:
+                if job is None:
+                    typer.echo(json.dumps({"processed": False, "reason": "queue_empty"}))
+                    return
+                typer.echo(json.dumps(job.as_dict(), indent=2, default=str))
+                if job.status == "failed":
+                    raise typer.Exit(code=1)
+                # Re-queued after a failed attempt is not a hard failure yet.
+                if job.status == "queued":
+                    raise typer.Exit(code=2)
+                return
+            if job is None:
+                import time as _time
+
+                _time.sleep(poll_s)
+    finally:
+        w.close()
 
 
 @app.command()

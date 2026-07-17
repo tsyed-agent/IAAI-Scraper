@@ -23,7 +23,8 @@ Ontario auction lots. Playwright clears Imperva; data lands in SQLite + raw JSON
 FastAPI serves a private read/command API. Single package `iaai_scraper`.
 
 Code is on `main` (PRs #6–#10 merged). Prefer small task branches off updated
-`main`. Next P0 after gateway: durable worker (2.4b) / canary (2.5);
+`main`. Phase 2 P0 board complete on `cursor/phase2-consolidate` (incl. 2.4b
+durable worker). Next: Phase 3 UI / Phase 0 Task 12 in-container crawl verify;
 0.11 in-container crawl still auth-gated.
 
 **Crawler runs on a host you control** (CLI / Docker / cron). GitHub Actions is

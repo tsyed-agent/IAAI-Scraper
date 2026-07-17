@@ -195,8 +195,8 @@ doc 09 staging (PR #6) ──┘
 - [x] 2.2 Off-host backup/restore
 - [ ] 2.3 Gateway / secrets
 - [x] 2.4a Thin scheduler wrapper (`scripts/scheduled_crawl.sh` + `docs/ops-scheduling.md`) — full queue worker still open
-- [ ] 2.4b Durable queue worker + metrics/alerts
-- [ ] 2.5 Live canary
+- [x] 2.4b Durable queue worker + metrics/alerts
+- [x] 2.5 Live canary
 
 ### Phase 3 — UI
 - [ ] 3.1 Lazy viewport thumbs

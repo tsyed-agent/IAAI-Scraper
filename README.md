@@ -85,6 +85,8 @@ CLI shortcuts (same logic, for ops without HTTP):
 
 ```bash
 python -m iaai_scraper.cli crawl            # sync via CLI (blocking)
+python -m iaai_scraper.cli enqueue-crawl    # durable queue: enqueue crawl job
+python -m iaai_scraper.cli worker --once    # durable queue: claim+run one job
 python -m iaai_scraper.cli stats            # DB statistics
 python -m iaai_scraper.cli backup           # atomic snapshot under data/backups/
 python -m iaai_scraper.cli offsite-backup   # upload DB+raw + SHA-256 manifest
@@ -93,7 +95,8 @@ python -m iaai_scraper.cli restore-drill    # prove off-host snapshot restores
 
 python scripts/verify_ontario_crawl.py     # verify last crawl invariants
 python scripts/audit_raw_coverage.py data/raw/**/*.jsonl.gz  # offline field/completeness audit
-scripts/scheduled_crawl.sh                 # cron entrypoint: crawl + one retry (see docs/ops-scheduling.md)
+scripts/scheduled_worker.sh                # preferred cron entrypoint: durable queue worker (2.4b)
+scripts/scheduled_crawl.sh                 # thin cron entrypoint: crawl + one retry (2.4a)
 ```
 
 Example API calls:
@@ -178,7 +181,7 @@ completeness checks), usage, results, and limitations are documented in
 | [`docs/07-live-verification.md`](docs/07-live-verification.md) | **Live E2E verification of Ontario-at-source crawl (2026-06-26).** |
 | [`docs/09-enterprise-hardening-plan.md`](docs/09-enterprise-hardening-plan.md) | **Production gates, target architecture, testing, SLOs, and multi-source roadmap.** |
 | [`docs/10-implementation-plan.md`](docs/10-implementation-plan.md) | **Actionable next plan: media pointers/cache, UI boundary, remaining P0/P1 tasks.** |
-| [`docs/ops-scheduling.md`](docs/ops-scheduling.md) | Cron/systemd crawl schedule + `scheduled_crawl.sh` retry wrapper. |
+| [`docs/ops-scheduling.md`](docs/ops-scheduling.md) | Cron/systemd crawl schedule + durable worker (`scheduled_worker.sh`) / thin wrapper. |
 | [`docs/ops-backup.md`](docs/ops-backup.md) | Off-host backup upload + restore drill. |
 | [`docs/ops-gateway.md`](docs/ops-gateway.md) | TLS nginx edge, rate/body limits, secrets, command isolation. |
 | [`docs/ops-backfill.md`](docs/ops-backfill.md) | Offline raw JSONL → SQLite baseline backfill. |
