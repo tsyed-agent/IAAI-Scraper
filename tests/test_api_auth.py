@@ -122,6 +122,8 @@ def test_thumbnail_accepts_api_key_query(authed_client, monkeypatch):
     r = authed_client.get(f"/lots/100/thumbnail?api_key={TOKEN}")
     assert r.status_code == 200
     assert r.headers["x-image-cache"] == "MISS"
+    assert r.headers.get("deprecation") == "true"
+    assert r.headers.get("sunset")
 
 
 def test_lots_thumbnail_href_is_signed(authed_client):

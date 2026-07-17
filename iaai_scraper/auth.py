@@ -211,7 +211,11 @@ def require_api_auth_flexible(
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
     api_key: Optional[str] = Query(
         None,
-        description="Deprecated: long-lived token for <img src>; prefer expires+sig",
+        deprecated=True,
+        description=(
+            "Deprecated: long-lived token for <img src>; prefer ?expires=&sig=. "
+            "Sunset 2026-11-01; see docs/api-versioning.md."
+        ),
     ),
     expires: Optional[str] = Query(
         None,
@@ -222,7 +226,11 @@ def require_api_auth_flexible(
         description="HMAC signature for signed media URL (thumbnail route)",
     ),
 ) -> str:
-    """Auth for media: header token, signed ``expires``+``sig``, or deprecated ``api_key``."""
+    """Auth for media: header token, signed ``expires``+``sig``, or deprecated ``api_key``.
+
+    Return values: ``unauthenticated``, ``header``, ``signed``, ``signed-invalid``,
+    or ``api_key_query`` (legacy query param; response should send Deprecation/Sunset).
+    """
     if not require_auth_enabled():
         return "unauthenticated"
 
@@ -233,13 +241,22 @@ def require_api_auth_flexible(
             detail="API auth misconfigured: IAAI_API_TOKEN is not set",
         )
 
-    provided = _extract_token(authorization, x_api_key or api_key)
-    if provided and secrets.compare_digest(provided, expected):
+    header_provided = _extract_token(authorization, x_api_key)
+    query_provided = api_key.strip() if api_key else None
+
+    if header_provided and secrets.compare_digest(header_provided, expected):
         if expires is not None or sig:
             if verify_media_signature(request.url.path, expires, sig, key=expected):
                 return "signed"
             return "signed-invalid"
         return "header"
+
+    if query_provided and secrets.compare_digest(query_provided, expected):
+        if expires is not None or sig:
+            if verify_media_signature(request.url.path, expires, sig, key=expected):
+                return "signed"
+            return "signed-invalid"
+        return "api_key_query"
 
     if expires is not None or sig:
         if verify_media_signature(request.url.path, expires, sig, key=expected):
@@ -249,7 +266,7 @@ def require_api_auth_flexible(
             detail="invalid or expired media signature",
         )
 
-    if provided:
+    if header_provided or query_provided:
         raise HTTPException(status_code=403, detail="invalid API token")
     raise HTTPException(
         status_code=401,

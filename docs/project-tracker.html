@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-updated="2026-07-17T03:05">
+<html lang="en" data-updated="2026-07-17T03:10">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -321,7 +321,7 @@
         </div>
         <div class="card">
           <h3>Now</h3>
-          <p>Gateway (2.3), canary (2.5), and raw backfill (2.6) landed. Next P0: durable worker (2.4b) or API schemas (2.7). Phase 0 Task 12 still needs authorized in-container crawl verify.</p>
+          <p>Phase 2 board tasks 2.2–2.7 landed (gateway, canary, backfill, schemas). Remaining P0: durable queue worker (2.4b). Phase 0 Task 12 still needs authorized in-container crawl verify.</p>
         </div>
       </div>
     </header>
@@ -825,7 +825,7 @@
           </div>
         </details>
 
-        <details class="task" data-status="open" data-id="2.7">
+        <details class="task" data-status="completed" data-id="2.7">
           <summary>
             <span class="check"></span>
             <span class="task-n">Task 7</span>
@@ -833,8 +833,19 @@
               <span class="task-name">Versioned API response schemas + deprecation policy</span>
               <span class="task-ref">doc 09 Phase C remainder</span>
             </span>
-            <span class="tags"><span class="tag open">open</span></span>
+            <span class="tags"><span class="tag completed">completed</span></span>
           </summary>
+          <div class="task-body">
+            <h4>Acceptance</h4>
+            <p><code>X-API-Version: v1</code> + Pydantic <code>*V1</code> models; deprecation policy for <code>?api_key=</code>; contract tests.</p>
+            <h4>PR / commits</h4>
+            <p><code>cursor/phase2-api-schemas</code> · <code>iaai_scraper/api_schemas.py</code> · <code>docs/api-versioning.md</code></p>
+            <h4>Comments</h4>
+            <ul class="comments">
+              <li><div class="who"><span class="sig cursor">Cursor</span><span>2026-07-16</span></div>
+              <p>Header versioning + typed list/detail/stats models; Sunset headers on legacy api_key; 165 pytest green.</p></li>
+            </ul>
+          </div>
         </details>
 
       </div>

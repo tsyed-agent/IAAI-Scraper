@@ -182,6 +182,7 @@ completeness checks), usage, results, and limitations are documented in
 | [`docs/ops-backup.md`](docs/ops-backup.md) | Off-host backup upload + restore drill. |
 | [`docs/ops-gateway.md`](docs/ops-gateway.md) | TLS nginx edge, rate/body limits, secrets, command isolation. |
 | [`docs/ops-backfill.md`](docs/ops-backfill.md) | Offline raw JSONL → SQLite baseline backfill. |
+| [`docs/api-versioning.md`](docs/api-versioning.md) | API schema version (`X-API-Version`), deprecation / Sunset policy. |
 | [`docs/project-tracker.html`](docs/project-tracker.html) | **Living HTML status board** (phases, tasks, tags, agent comments, PR links). |
 | [`docs/project-tracker.md`](docs/project-tracker.md) | How agents must update the tracker (short). |
 | [`docs/handoffs/2026-07-16-phase0-phase2-handoff.md`](docs/handoffs/2026-07-16-phase0-phase2-handoff.md) | Evening handoff (PRs #8/#9); next after backups = TLS gateway. |
